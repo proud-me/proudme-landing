@@ -1,0 +1,1676 @@
+/* =========================================================================
+   ProudMe landing + privacy site
+   Tokens lifted from project-proudme-mobile-dev/lib/theme/v1_tokens.dart
+   so the marketing surface matches the app exactly.
+   ========================================================================= */
+
+:root {
+  --brand-start: #3C3293;
+  --brand-mid:   #5040AE;
+  --brand-end:   #8054C9;
+  --cream:       #FBFAF7;
+  --bone:        #F7F5EC;
+  --card:        #FFFFFF;
+  --ink:         #1A1533;
+  --ink2:        #4A476B;
+  --muted:       #8B88A8;
+  --line:        rgba(60, 50, 147, 0.08);
+  --line-strong: rgba(60, 50, 147, 0.18);
+  --card-tint:        rgba(60, 50, 147, 0.035);
+  --card-tint-strong: rgba(60, 50, 147, 0.06);
+  --sun:         #F5A623;
+  --sun2:        #FFB84D;
+  --activity:    #8884D8;
+  --eating:      #77DD77;
+  --sleep:       #FF6961;
+  --screen:      #A7C7E7;
+
+  --brand-grad: linear-gradient(135deg, #3C3293 0%, #5040AE 60%, #8054C9 100%);
+  --sun-grad:   linear-gradient(135deg, #F5A623 0%, #FFB84D 100%);
+
+  --radius-sm:   12px;
+  --radius-md:   18px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 8px 24px rgba(60, 50, 147, 0.12);
+  --shadow-lg: 0 16px 40px rgba(60, 50, 147, 0.18);
+}
+
+/* ----- reset / base ----------------------------------------------------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  /* Firefox: thin scrollbar with brand-mid thumb on a translucent
+     cream track. Reads as branded without becoming the loudest thing
+     on the page. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-mid) rgba(60, 50, 147, 0.06);
+}
+
+/* Chromium / Safari / Edge: slim 10px scrollbar with brand-mid thumb,
+   pill-rounded, slightly bolder on hover. The track stays nearly
+   invisible so the thumb is the only branded element. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(60, 50, 147, 0.04);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--brand-mid);
+  border-radius: 999px;
+  border: 2px solid var(--cream);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-start);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Anchored nav/footer jumps shouldn't land behind the 64px sticky nav.
+   80px = nav height + a 16px breathing pad. Applies to every section
+   with an id (the only legitimate anchor targets on this site). */
+section[id], main[id] { scroll-margin-top: 80px; }
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: 'Montserrat', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 500;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img, svg { display: block; max-width: 100%; height: auto; }
+
+a { color: var(--brand-mid); text-decoration: none; }
+a:hover { color: var(--brand-start); text-decoration: underline; }
+
+button { font: inherit; cursor: pointer; }
+
+:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ----- layout helpers --------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 clamp(20px, 4vw, 40px);
+}
+
+.container--wide { max-width: 1440px; }
+
+.section {
+  padding: clamp(48px, 7vw, 96px) 0;
+}
+
+.section--tight { padding: 28px 0; }
+
+.section__eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-mid);
+  margin-bottom: 12px;
+}
+
+.section__title {
+  font-size: clamp(28px, 4.2vw, 52px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  line-height: 1.15;
+}
+
+.section__lede {
+  font-size: 16px;
+  color: var(--ink2);
+  margin: 0 0 20px;
+  max-width: 560px;
+}
+
+/* ----- top nav ---------------------------------------------------------- */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(60, 50, 147, 0.85);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.nav__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  width: 100%;
+  padding: 0 clamp(20px, 4vw, 56px);
+}
+
+.nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  font-size: 18px;
+  color: white;
+}
+
+.nav__brand-mark {
+  width: 36px;
+  height: 36px;
+  display: block;
+  flex-shrink: 0;
+  padding: 3px;
+  background: white;
+  border-radius: 9px;
+}
+
+.nav__links {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.nav__links a {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.nav__links a:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.10);
+  text-decoration: none;
+}
+
+.nav__links a[aria-current="page"],
+.nav__links a[aria-current="true"] {
+  color: white;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Hamburger toggle: hidden on desktop, shown at <=599px (see mobile
+   block below). 44x44 meets the Apple HIG tap-target minimum. */
+.nav__toggle {
+  display: none;
+  background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.30);
+  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav__toggle-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: white;
+  border-radius: 2px;
+  transition: transform 180ms ease, opacity 120ms ease;
+}
+.nav.is-open .nav__toggle-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav.is-open .nav__toggle-bar:nth-child(2) { opacity: 0; }
+.nav.is-open .nav__toggle-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* Below 720px (tablet), tighten the inline nav so the 5 anchors fit.
+   This rule is still useful for the 600-719px tablet band; the <=599px
+   phone block below replaces it with a hamburger dropdown. */
+@media (max-width: 719px) {
+  .nav__links { gap: 8px; font-size: 12px; }
+  .nav__links a { padding: 10px 8px; min-height: 40px; display: inline-flex; align-items: center; }
+}
+
+@media (min-width: 720px) {
+  .nav__links { gap: 28px; }
+}
+
+/* ----- hero ------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  background: var(--brand-grad);
+  color: white;
+  padding: 56px 0 72px;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(800px 400px at 80% 10%, rgba(255, 184, 77, 0.18), transparent 60%),
+    radial-gradient(600px 400px at 10% 80%, rgba(255, 255, 255, 0.10), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: conic-gradient(from 0deg,
+    rgba(255, 184, 77, 0.20),
+    rgba(128, 84, 201, 0.18),
+    rgba(80, 64, 174, 0.22),
+    rgba(255, 184, 77, 0.20));
+  filter: blur(80px);
+  opacity: 0.55;
+  pointer-events: none;
+  animation: heroMesh 30s linear infinite;
+  will-change: transform;
+  z-index: 0;
+}
+
+@keyframes heroMesh {
+  to { transform: rotate(360deg); }
+}
+
+.hero__inner { position: relative; z-index: 1; }
+
+.hero__kicker {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.hero h1 {
+  font-size: clamp(32px, 6vw, 72px);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  font-weight: 900;
+  margin: 0 0 16px;
+  max-width: 1080px;
+}
+
+.hero h1 .accent { color: var(--sun); }
+
+.hero__sub {
+  font-size: clamp(16px, 2.1vw, 20px);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0 0 24px;
+  max-width: 620px;
+}
+
+.hero__cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.cta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 22px;
+  border-radius: var(--radius-pill);
+  background: var(--sun-grad);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 18px rgba(245, 166, 35, 0.35);
+  border: none;
+}
+
+.cta-pill:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(245, 166, 35, 0.45);
+}
+
+.hero .cta-pill:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(60, 50, 147, 0.5);
+}
+
+.cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 22px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.cta-ghost:hover {
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.20);
+  color: white;
+}
+
+.hero__credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hero__credit-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: white;
+  color: var(--brand-start);
+  font-weight: 900;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.hero__micro {
+  display: block;
+  margin-top: 14px;
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cta-ghost--quiet {
+  background: transparent;
+  border: none;
+  padding: 14px 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.cta-ghost--quiet:hover {
+  background: transparent;
+  color: white;
+  text-decoration: underline;
+}
+
+.pillars-strip {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 12px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  max-width: max-content;
+}
+
+.pillars-strip li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pillars-strip li > span { color: var(--sun); }
+
+#security .section__eyebrow { color: #8a5a00; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero::after { animation: none; }
+}
+
+/* Hero demo: bobbing mini Pebble floats above a white "today's
+   Pebble note" card pinned bottom-right of the hero. Card holds
+   a pure-CSS typewriter that loops 20 messages plus 3 interactive
+   green quick-reply chips that rotate through 20 preset prompts. */
+.hero__demo {
+  position: absolute;
+  bottom: 40px;
+  right: 32px;
+  width: 320px;
+  z-index: 2;
+  display: block;
+  pointer-events: auto;
+}
+
+.hero__demo-card {
+  position: relative;
+  width: 100%;
+  /* Top padding clears the half-overlapping 72px mascot sticker AND its
+     orange drop shadow. Mascot circle bottom sits at +36px from card top;
+     shadow (0 6px 16px) extends ~22px further to ~+58px. 64px puts the
+     header row at +64 for a ~6px clean gap above the shadow's lower edge
+     and ~28px clean separation to the typewriter below. */
+  padding: 64px 16px 14px;
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.20);
+  color: var(--ink);
+  /* Aside is pointer-events: auto so the chips can be clicked. The card
+     itself has no click handler, so opt back out at this layer and only
+     re-enable on the chips themselves. Avoids a "card body is hover-
+     responsive but does nothing" UX leak. */
+  pointer-events: none;
+}
+
+.hero__demo-mascot {
+  /* Half-overlap sticker: mascot straddles the card's top edge so the
+     "antenna above the card" that previously got clipped by the sticky
+     nav is now only ~36px tall (mascot 72px / 2) instead of 92px + 22px
+     gap = 114px. Result: mascot scrolls cleanly behind nav with the
+     card, no decapitated-head moment during normal scroll. */
+  position: absolute;
+  top: -36px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 999px;
+  outline: none;
+  transition: transform 160ms ease;
+}
+.hero__demo-mascot:hover { transform: translateX(-50%) translateY(-2px); }
+.hero__demo-mascot:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 4px;
+}
+.hero__demo-mascot.is-wiggling .pebble-mascot--mini {
+  animation: pebbleWiggle 600ms ease-in-out;
+}
+.hero__demo-mascot.is-reacting .pebble-mascot--mini {
+  animation: pebbleReact 800ms ease-in-out;
+}
+
+@keyframes pebbleWiggle {
+  0%   { transform: translateY(0) rotate(0); }
+  25%  { transform: translateY(-10px) rotate(-7deg); }
+  50%  { transform: translateY(-4px) rotate(7deg); }
+  75%  { transform: translateY(-8px) rotate(-3deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+@keyframes pebbleReact {
+  0%   { transform: translateY(0) scale(1); }
+  30%  { transform: translateY(-8px) scale(1.06); }
+  60%  { transform: translateY(-2px) scale(0.98); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* Double-class selector (.pebble-mascot.pebble-mascot--mini) bumps the
+   specificity from (0,1,0) to (0,2,0) so the mini overrides beat the base
+   .pebble-mascot rule (which is defined later in this file at ~L703 and
+   was winning the cascade, sizing the "mini" mascot at 200x200 with the
+   giant 0 18px 40px drop shadow and eclipsing the chat card's typewriter). */
+.pebble-mascot.pebble-mascot--mini {
+  width: 72px;
+  height: 72px;
+  box-shadow:
+    0 6px 16px rgba(245, 166, 35, 0.45),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.12);
+  /* Also override the inherited 4s pebbleBob loop so the mini's bob is
+     scaled down for the smaller body (the 200px version translates 6px,
+     which on a 72px mini would be a proportionally huge jump). */
+  animation: pebbleBobMini 4s ease-in-out infinite;
+}
+
+@keyframes pebbleBobMini {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+.pebble-mascot--mini .pebble-mascot__face { inset: 30% 18% 18% 18%; }
+.pebble-mascot--mini .pebble-mascot__eye { width: 8px; height: 11px; }
+.pebble-mascot--mini .pebble-mascot__cheek { width: 9px; height: 6px; }
+.pebble-mascot--mini .pebble-mascot__mouth { width: 14px; height: 7px; border-width: 2px; }
+
+.hero__demo-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.hero__demo-head strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.hero__demo-timestamp {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.hero__demo-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.hero__demo-typing-dots.is-active { opacity: 1; }
+.hero__demo-typing-dots > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--brand-mid);
+  animation: heroDemoTypingDot 1.2s ease-in-out infinite;
+}
+.hero__demo-typing-dots > span:nth-child(2) { animation-delay: 0.18s; }
+.hero__demo-typing-dots > span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes heroDemoTypingDot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40%           { opacity: 1;   transform: translateY(-2px); }
+}
+
+.hero__demo-msg-wrap {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink2);
+  font-weight: 600;
+  min-height: 60px;
+}
+
+.hero__demo-msg {
+  display: inline;
+  word-break: break-word;
+}
+
+.hero__demo-msg-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  background: var(--brand-mid);
+  vertical-align: text-bottom;
+  margin-left: 1px;
+  animation: heroDemoBlink 0.8s steps(2) infinite;
+}
+
+@keyframes heroDemoBlink {
+  50% { opacity: 0; }
+}
+
+.hero__demo-hint {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-start);
+  text-align: center;
+  letter-spacing: 0.02em;
+  opacity: 0.78;
+  animation: heroDemoHintBob 1.6s ease-in-out infinite;
+}
+
+@keyframes heroDemoHintBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.hero__demo-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.hero__demo-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.10);
+  border: 1px solid rgba(34, 197, 94, 0.32);
+  color: rgb(21, 128, 61);
+  font: 700 11px/1 'Montserrat', sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+  white-space: nowrap;
+}
+
+.hero__demo-chip:hover {
+  background: rgba(34, 197, 94, 0.18);
+  transform: translateY(-1px);
+}
+
+.hero__demo-chip:active { transform: translateY(0); }
+
+.hero__demo-chip:focus-visible {
+  outline: 2px solid var(--brand-mid);
+  outline-offset: 2px;
+}
+
+.hero__demo-chip.is-pressed {
+  transform: scale(0.94);
+  background: rgba(34, 197, 94, 0.28);
+}
+
+.hero__demo-chip-count {
+  /* Element kept in DOM (JS still queries it) but visually suppressed.
+     The chip set is randomized on load + reshuffled on mascot click;
+     showing a numeric counter just adds visual noise for the reader. */
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__demo-msg-cursor { animation: none; opacity: 0.6; }
+  .hero__demo-typing-dots > span { animation: none; }
+  .hero__demo-hint { animation: none; }
+  .hero__demo-chip { transition: none; }
+  .hero__demo-mascot { transition: none; }
+  /* Preserve the translateX(-50%) centering even at reduced motion;
+     only suppress the hover lift. */
+  .hero__demo-mascot:hover { transform: translateX(-50%); }
+  .hero__demo-mascot.is-wiggling .pebble-mascot--mini,
+  .hero__demo-mascot.is-reacting .pebble-mascot--mini { animation: none; }
+}
+
+@media (max-width: 899px) {
+  .hero__demo { display: none; }
+}
+
+@media (max-width: 599px) {
+  .hero { padding: 40px 0 56px; }
+  .hero::after { animation: none; opacity: 0.35; }
+
+  /* Mobile hero: stack as a centered flex column; re-order so the
+     typewriter demo lands after the subhead, before the CTA. */
+  .hero__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+  }
+  .hero__kicker  { order: 1; }
+  .hero h1       { order: 2; }
+  .hero__sub     { order: 3; }
+  .hero__demo    { order: 4; }
+  .hero__cta-row { order: 5; justify-content: center; align-items: center; }
+  .pillars-strip { order: 6; justify-content: center; }
+  .hero__credit  { order: 7; align-self: center; text-align: left; }
+  .hero__micro   { order: 8; }
+
+  /* Restore the demo card on phones. The ≤899px rule above hides it for
+     tablets where the desktop absolute-right layout still doesn't fit;
+     here we re-show it inline, full-width, statically positioned. The
+     half-overlap mascot sticker (top: -36px) still works because the
+     card's 64px top padding clears it. */
+  .hero__demo {
+    display: block;
+    position: static;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: 440px;
+    margin: 8px auto 0;
+    z-index: auto;
+  }
+
+  /* Global section headers centered on mobile */
+  .section__eyebrow,
+  .section__title,
+  .section__lede { text-align: center; }
+
+  /* Meet Pebble marketing copy */
+  .pebble-moment__lede,
+  .pebble-moment__points { text-align: center; }
+  .pebble-moment__points { list-style-position: inside; }
+
+  /* Parent needs text-align: center for the inline-block
+     .section__eyebrow ("MEET YOUR BUDDY") to actually center.
+     Setting text-align on the eyebrow itself only centers content
+     inside it, not the element itself. */
+  .pebble-moment__copy { text-align: center; }
+
+  /* (Bullet rule lives later in the file, after the base
+     .pebble-moment__points li rule, so cascade order lets the mobile
+     override win.) */
+
+  /* Contact: intro copy centered, form labels/inputs stay left for UX */
+  .contact__copy,
+  .contact__lede   { text-align: center; }
+  .contact__meta   { align-items: center; text-align: center; }
+  .contact__submit { align-self: center; }
+
+  /* Footer brand + links centered */
+  .footer__row   { align-items: center; text-align: center; }
+  .footer__links { justify-content: center; }
+
+  /* Hamburger nav: show toggle, turn .nav__links into an absolute
+     dropdown that slides in when .nav has class .is-open. */
+  .nav__toggle { display: flex; }
+
+  .nav__links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 0;
+    /* Solid brand-start so the hero text doesn't bleed through. The
+       nav above stays glass-morphic (0.85 alpha); the dropdown panel
+       is opaque to give the menu its own visual surface. */
+    background: var(--brand-start);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+    padding: 8px 20px 20px;
+    transform: translateY(-8px);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 200ms ease, opacity 160ms ease,
+                visibility 0s linear 200ms;
+  }
+  .nav.is-open .nav__links {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    transition: transform 200ms ease, opacity 160ms ease, visibility 0s;
+  }
+  .nav__links a {
+    width: 100%;
+    padding: 16px 12px;
+    font-size: 16px;
+    border-radius: 12px;
+    min-height: 48px;
+    justify-content: flex-start;
+  }
+  .nav__links a:hover,
+  .nav__links a:focus-visible {
+    background: rgba(255, 255, 255, 0.10);
+  }
+
+  /* Body scroll-lock when menu is open */
+  body.nav-is-open { overflow: hidden; }
+}
+
+@media (max-width: 479px) {
+  .hero__cta-row { flex-direction: column; align-items: stretch; }
+  .hero__cta-row .cta-pill,
+  .hero__cta-row .cta-ghost { width: 100%; justify-content: center; }
+  .pillars-strip {
+    max-width: none;
+    justify-content: space-between;
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ----- meet pebble ----------------------------------------------------- */
+
+.pebble-moment {
+  background: linear-gradient(180deg, var(--cream) 0%, #f3eeff 100%);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.pebble-moment__inner {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  align-items: center;
+}
+
+@media (min-width: 720px) {
+  .pebble-moment__inner { grid-template-columns: 240px 1fr; gap: 48px; }
+}
+
+.pebble-moment__avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.pebble-moment__caption {
+  margin: 0;
+  max-width: 220px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink2);
+}
+
+.pebble-mascot {
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: var(--sun-grad);
+  box-shadow:
+    0 18px 40px rgba(245, 166, 35, 0.40),
+    inset 0 -10px 20px rgba(0, 0, 0, 0.12);
+  position: relative;
+  animation: pebbleBob 4s ease-in-out infinite;
+}
+
+.pebble-mascot__face {
+  position: absolute;
+  inset: 30% 18% 18% 18%;
+}
+
+.pebble-mascot__eye {
+  position: absolute;
+  top: 0;
+  width: 16px; height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.pebble-mascot__eye--l { left: 18%; }
+.pebble-mascot__eye--r { right: 18%; }
+
+.pebble-mascot__cheek {
+  position: absolute;
+  top: 40%;
+  width: 18px; height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 105, 97, 0.55);
+}
+.pebble-mascot__cheek--l { left: 8%; }
+.pebble-mascot__cheek--r { right: 8%; }
+
+.pebble-mascot__mouth {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px; height: 14px;
+  border: 3px solid var(--ink);
+  border-top: 0;
+  border-radius: 0 0 28px 28px;
+}
+
+@keyframes pebbleBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pebble-mascot { animation: none; }
+}
+
+.pebble-moment__lede {
+  font-size: 16px;
+  color: var(--ink2);
+  margin: 0 0 16px;
+}
+
+.pebble-moment__points {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pebble-moment__points li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 14px;
+  color: var(--ink2);
+  line-height: 1.5;
+}
+
+.pebble-moment__points li > span:first-child {
+  flex: 0 0 24px;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.pebble-moment__points strong { color: var(--ink); }
+
+/* Mobile override: the base rule above (display:flex) is defined later in
+   the file than the <=599 block at the top, so cascade order beats the
+   media query. Re-declare here AFTER the base rule so it wins. Centers
+   each bullet's emoji + bold + sentence as a single text block. */
+@media (max-width: 599px) {
+  .pebble-moment__points li {
+    display: block;
+    text-align: center;
+    padding-left: 0;
+  }
+}
+
+/* ----- features grid --------------------------------------------------- */
+
+#features {
+  background: var(--bone);
+}
+
+.features__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .features__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 980px) {
+  .features__grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1280px) {
+  .features__grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.feature {
+  background: var(--card-tint);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feature__icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: var(--brand-grad);
+  display: grid; place-items: center;
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.feature h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.feature p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+/* ----- announcements --------------------------------------------------- */
+
+.updates {
+  background: var(--cream);
+}
+
+.updates__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.announcement {
+  background: var(--card-tint);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  border-left: 4px solid var(--brand-mid);
+}
+
+.announcement--soon {
+  border-left-color: var(--sun);
+  background: linear-gradient(180deg, #fff 0%, #fff8e6 100%);
+}
+
+.announcement__header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 8px;
+}
+
+.announcement__version {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-start);
+  background: rgba(60, 50, 147, 0.08);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.announcement--soon .announcement__version {
+  color: #8a5a00;
+  background: rgba(245, 166, 35, 0.16);
+}
+
+.announcement__date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.announcement__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.announcement__body p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.announcement__body ul {
+  margin: 8px 0 0;
+  padding: 0 0 0 20px;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.announcement__body li { margin-bottom: 4px; }
+
+/* ----- info sections (Security + Privacy share these primitives) ------ */
+
+.info {
+  background: var(--bone);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Alternate the second info section so Security and Privacy visually
+   separate from each other when stacked back-to-back. */
+.info--alt {
+  background: var(--cream);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 600px) {
+  .info-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 980px) {
+  .info-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.info-card {
+  background: var(--card-tint-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-card__icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: var(--brand-grad);
+  display: grid; place-items: center;
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.info-card h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.info-card p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink2);
+}
+
+.info-card a { font-weight: 700; }
+
+#privacy-section .info-card__icon {
+  background: var(--sun-grad);
+  color: var(--ink);
+}
+
+.info__stamp {
+  display: inline-block;
+  margin: 12px 0 28px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(60, 50, 147, 0.10);
+  color: var(--brand-start);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.info__footer-note {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 24px 0 0;
+}
+
+/* ----- contact -------------------------------------------------------- */
+
+.contact {
+  background: var(--bone);
+  border-top: 1px solid var(--line);
+}
+
+.contact__inner {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  align-items: start;
+  width: 100%;
+  padding: 0 clamp(20px, 4vw, 56px);
+}
+
+@media (min-width: 820px) {
+  .contact__inner { grid-template-columns: 1fr 1fr; gap: 48px; }
+}
+
+.contact__lede {
+  font-size: 15px;
+  color: var(--ink2);
+  margin: 0 0 16px;
+}
+
+.contact__meta {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.contact__meta strong { color: var(--ink); margin-right: 6px; }
+
+.contact__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--card-tint-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.contact__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.contact__field input,
+.contact__field textarea {
+  font: inherit;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: white;
+  color: var(--ink);
+  width: 100%;
+}
+
+.contact__field textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.contact__field input:focus,
+.contact__field textarea:focus {
+  outline: none;
+  border-color: var(--brand-mid);
+  box-shadow: 0 0 0 3px rgba(80, 64, 174, 0.18);
+}
+
+.contact__submit { align-self: flex-start; }
+
+.contact__hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+.contact__status {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 1em;
+}
+.contact__status--sending { color: var(--ink2); }
+.contact__status--success {
+  color: var(--brand-mid);
+  padding: 10px 12px;
+  background: rgba(60, 50, 147, 0.08);
+  border-radius: var(--radius-sm);
+}
+.contact__status--error {
+  color: #b3261e;
+  padding: 10px 12px;
+  background: rgba(179, 38, 30, 0.08);
+  border-radius: var(--radius-sm);
+}
+
+/* ----- mobile-only section padding ------------------------------------ */
+
+@media (max-width: 599px) {
+  .section { padding: 32px 0; }
+}
+
+/* ----- toast (mirrors lib/widgets/toast.dart) ------------------------- */
+
+.toast-root {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 100;
+  padding-top: 12px;
+}
+
+.toast {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  margin: 0 16px;
+  padding: 0;
+  background: white;
+  border: 1px solid rgba(245, 166, 35, 0.30);
+  border-radius: 18px;
+  box-shadow: 0 4px 16px rgba(60, 50, 147, 0.18);
+  overflow: hidden;
+  transform: translateY(-40%);
+  opacity: 0;
+  animation: toastIn 220ms cubic-bezier(.2, .8, .2, 1) forwards;
+  cursor: pointer;
+}
+
+.toast--leaving {
+  animation: toastOut 220ms cubic-bezier(.4, 0, 1, 1) forwards;
+}
+
+.toast__bar {
+  width: 6px;
+  background: var(--sun);
+  border-radius: 3px;
+  margin: 12px 0 12px 12px;
+  flex-shrink: 0;
+}
+
+.toast__body {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+  padding: 12px 16px 12px 4px;
+}
+
+@keyframes toastIn {
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes toastOut {
+  to { transform: translateY(-40%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; transform: translateY(0); opacity: 1; }
+  .toast--leaving { animation: none; opacity: 0; }
+}
+
+/* ----- footer ---------------------------------------------------------- */
+
+.footer {
+  background: var(--ink);
+  color: rgba(255, 255, 255, 0.78);
+  padding: 40px 0 32px;
+  font-size: 13px;
+}
+
+.footer__row {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0 clamp(20px, 4vw, 56px);
+}
+
+@media (min-width: 720px) {
+  .footer__row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.footer a { color: rgba(255, 255, 255, 0.92); }
+.footer a:hover { color: var(--sun); }
+
+.footer__brand {
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  font-size: 16px;
+  color: white;
+}
+
+.footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* ----- privacy.html long-form ------------------------------------------ */
+
+.policy {
+  background: var(--cream);
+  padding: 48px 0 80px;
+}
+
+.policy__wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.policy__banner {
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.40);
+  color: #6b4500;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.policy h1 {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0 0 8px;
+}
+
+.policy h2 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 36px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.policy h3 {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 24px 0 8px;
+}
+
+.policy p, .policy li {
+  font-size: 15px;
+  color: var(--ink2);
+  line-height: 1.65;
+}
+
+.policy ul { padding-left: 22px; }
+
+.policy code {
+  background: rgba(60, 50, 147, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  color: var(--brand-start);
+}
+
+.policy strong { color: var(--ink); }
+
+.policy blockquote {
+  margin: 16px 0;
+  padding: 12px 18px;
+  border-left: 4px solid var(--brand-mid);
+  background: rgba(60, 50, 147, 0.04);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--ink2);
+  font-size: 14px;
+}
+
+.policy table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13px;
+}
+
+.policy th, .policy td {
+  border: 1px solid var(--line-strong);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  background: white;
+}
+
+.policy th {
+  background: var(--bone);
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.policy .confirm {
+  display: inline-block;
+  background: rgba(245, 166, 35, 0.18);
+  color: #6b4500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.policy hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 32px 0;
+}
+
+.policy__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 32px;
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--brand-start);
+}
+
+.policy__back:hover { background: var(--bone); text-decoration: none; }
+
+/* Visually hidden but readable to screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .pillar, .cta-pill { transition: none; }
+}
+
+/* Print rules: the privacy policy will be printed by LSU legal / IRB. Drop
+   chrome and colored backgrounds, keep link targets visible. */
+@media print {
+  .nav,
+  .footer,
+  .policy__back,
+  .hero__cta-row,
+  .cta-pill,
+  .cta-ghost,
+  .updates,
+  .trust,
+  .mockups,
+  .pillars,
+  .privacy-card { display: none; }
+
+  body { background: white; color: black; }
+  a { color: black; text-decoration: underline; }
+  a[href^="http"]::after,
+  a[href^="mailto"]::after {
+    content: " (" attr(href) ")";
+    font-size: 10px;
+    color: #444;
+  }
+
+  .policy {
+    background: white;
+    padding: 0;
+  }
+  .policy__wrap { max-width: none; padding: 0; }
+  .policy h1, .policy h2, .policy h3, .policy p, .policy li {
+    color: black;
+  }
+  .policy table, .policy th, .policy td {
+    background: white;
+    color: black;
+    border-color: #000;
+  }
+  .policy blockquote {
+    background: none;
+    border-left-color: #000;
+    color: black;
+  }
+  .policy .confirm {
+    background: none;
+    border: 1px solid #000;
+    color: black;
+  }
+  .policy code {
+    background: none;
+    border: 1px solid #999;
+    color: black;
+  }
+}
+
+/* ---------- Mobile pass 3: section centering ---------- */
+/* Placed at end of file so every rule here wins the cascade against
+   any base declaration defined earlier above. Media query alone does
+   not add specificity, so source order is the lever. */
+@media (max-width: 599px) {
+  .nav__links a {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .pebble-moment__points li strong { display: block; }
+
+  .feature           { align-items: center; }
+  .feature h3,
+  .feature p         { text-align: center; }
+
+  .info-card         { align-items: center; }
+  .info-card h3,
+  .info-card p       { text-align: center; }
+
+  .contact__submit   { align-self: center; }
+  .contact__hint,
+  .contact__status   { text-align: center; }
+
+  /* Center the eyebrow + "Last reviewed" stamp + "Read the full
+     privacy policy" footer note inside the info sections. These are
+     inline-block / inline elements whose parent container has no
+     text-align, so they sit pinned to the left edge. */
+  #security > .container--wide,
+  #privacy-section > .container--wide { text-align: center; }
+
+  /* Footer: the base .footer__row rule at line 1410 sets
+     align-items: flex-start AFTER the earlier mobile rule at line 791,
+     so cascade was beating the media query. Re-declare here so the
+     brand block + footer links both center as flex column items. */
+  .footer__row { align-items: center; }
+}

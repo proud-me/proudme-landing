@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="100" viewBox="0 0 260 100">
+  <g transform="translate(4, 22)">
+    <path d="M 8 60 L 8 8 L 32 8 Q 48 8 48 24 Q 48 40 32 40 L 18 40" stroke="#3C3293" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+    <circle cx="32" cy="24" r="4" fill="#F5A623"></circle>
+  </g>
+  <text x="64" y="62" font-family="Montserrat, sans-serif" font-weight="800" font-size="38" letter-spacing="-0.025em" fill="#1A1533">roud<tspan fill="#3C3293">Me</tspan></text>
+  <path d="M 68 80 Q 138 96 222 80" stroke="#F5A623" stroke-width="3.5" stroke-linecap="round" fill="none"></path>
+</svg>

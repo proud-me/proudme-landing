@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ProudMe · Big habits start small.</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="ProudMe is a kids 7-12 wellness app that makes healthy habits feel like a game. A research project of the Pedagogical Kinesiology Lab at Louisiana State University.">
+  <meta name="theme-color" content="#3C3293">
+
+  <meta property="og:title" content="ProudMe · Big habits start small.">
+  <meta property="og:description" content="A wellness app for kids 7-12 that makes healthy habits feel like a game. Built by the LSU Pedagogical Kinesiology Lab.">
+  <meta property="og:type" content="website">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ProudMe · Big habits start small.">
+  <meta name="twitter:description" content="A wellness app for kids 7-12 that makes healthy habits feel like a game. Built by the LSU Pedagogical Kinesiology Lab.">
+
+  <!-- TODO: once the public hosting URL is set, restore the og:image, twitter:image, and canonical link with that URL. -->
+
+  <meta name="color-scheme" content="light">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="assets/appicon-indigo.svg" type="image/svg+xml">
+</head>
+<body>
+
+  <!-- ===== top nav ===== -->
+  <header class="nav" role="banner">
+    <div class="nav__inner">
+      <a class="nav__brand" href="#top" aria-label="ProudMe home">
+        <img class="nav__brand-mark" src="assets/logo-mark-brand.svg" alt="" width="32" height="32">
+        ProudMe
+      </a>
+      <button class="nav__toggle" type="button"
+              aria-expanded="false" aria-controls="nav-links"
+              aria-label="Open navigation menu">
+        <span class="nav__toggle-bar"></span>
+        <span class="nav__toggle-bar"></span>
+        <span class="nav__toggle-bar"></span>
+      </button>
+      <nav id="nav-links" class="nav__links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#updates">Updates</a>
+        <a href="#security">Security</a>
+        <a href="#privacy-section">Privacy</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ===== hero ===== -->
+    <section class="hero">
+      <div class="container container--wide hero__inner">
+        <span class="hero__kicker">For kids 7-12</span>
+        <h1>Big habits start <span class="accent">small.</span></h1>
+        <p class="hero__sub">The lifestyle app that makes healthy habits feel like a game. Move, eat, sleep, and unplug, one happy kid at a time.</p>
+        <div class="hero__cta-row">
+          <button class="cta-pill" type="button" id="cta-download" data-toast="Coming soon to iOS, we'll launch when LSU and Apple App Review give the green light.">
+            <span aria-hidden="true">📲</span> Download the app now
+          </button>
+          <a class="cta-ghost cta-ghost--quiet" href="#features">See what's inside</a>
+        </div>
+        <ul class="pillars-strip" aria-label="The four pillars">
+          <li><span aria-hidden="true">🏃</span> Activity</li>
+          <li><span aria-hidden="true">🥗</span> Eating</li>
+          <li><span aria-hidden="true">😴</span> Sleep</li>
+          <li><span aria-hidden="true">📱</span> Screen time</li>
+        </ul>
+        <span class="hero__credit">
+          <span class="hero__credit-badge" aria-hidden="true">LSU</span>
+          A research project led by Dr. Senlin Chen, PhD · LSU Pedagogical Kinesiology Lab
+        </span>
+        <span class="hero__micro">v1.0 · iPhone + iPad · Free</span>
+
+        <aside class="hero__demo" role="region" aria-label="Pebble chat preview">
+          <div class="hero__demo-card">
+            <div class="hero__demo-mascot" role="button" tabindex="0" aria-label="Shuffle quick replies">
+              <div class="pebble-mascot pebble-mascot--mini">
+                <div class="pebble-mascot__face">
+                  <span class="pebble-mascot__eye pebble-mascot__eye--l"></span>
+                  <span class="pebble-mascot__eye pebble-mascot__eye--r"></span>
+                  <span class="pebble-mascot__cheek pebble-mascot__cheek--l"></span>
+                  <span class="pebble-mascot__cheek pebble-mascot__cheek--r"></span>
+                  <span class="pebble-mascot__mouth"></span>
+                </div>
+              </div>
+            </div>
+            <div class="hero__demo-head">
+              <strong>Pebble</strong>
+              <span class="hero__demo-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span class="hero__demo-timestamp">just now</span>
+            </div>
+            <div class="hero__demo-msg-wrap">
+              <span class="hero__demo-msg" id="hero-demo-msg">Nice work logging breakfast! Want to add a veggie target today?</span><span class="hero__demo-msg-cursor" aria-hidden="true"></span>
+            </div>
+            <div class="hero__demo-hint" aria-hidden="true">↓ Try one, or tap Pebble (avatar above) to shuffle</div>
+            <div class="hero__demo-chips" id="hero-demo-chips" aria-label="Try a quick reply">
+              <button type="button" class="hero__demo-chip" data-chip-idx="0">Quick win</button>
+              <button type="button" class="hero__demo-chip" data-chip-idx="1">Sleep tips</button>
+              <button type="button" class="hero__demo-chip" data-chip-idx="2">Snack ideas</button>
+            </div>
+            <span class="hero__demo-chip-count" id="hero-demo-chip-count" aria-hidden="true"></span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===== meet pebble ===== -->
+    <section id="pebble" class="pebble-moment section">
+      <div class="container pebble-moment__inner">
+        <div class="pebble-moment__avatar">
+          <div class="pebble-mascot" aria-hidden="true">
+            <div class="pebble-mascot__face">
+              <span class="pebble-mascot__eye pebble-mascot__eye--l"></span>
+              <span class="pebble-mascot__eye pebble-mascot__eye--r"></span>
+              <span class="pebble-mascot__cheek pebble-mascot__cheek--l"></span>
+              <span class="pebble-mascot__cheek pebble-mascot__cheek--r"></span>
+              <span class="pebble-mascot__mouth"></span>
+            </div>
+          </div>
+          <p class="pebble-moment__caption">Customizable in the app, with a gallery of kid-friendly avatars.</p>
+        </div>
+        <div class="pebble-moment__copy">
+          <span class="section__eyebrow">Meet your buddy</span>
+          <h2 class="section__title">Hi, I'm Pebble.</h2>
+          <p class="pebble-moment__lede">A kid-safe AI buddy your child can actually talk to. Built for kids 7-12, reviewed by the LSU lab, and designed to keep the hard moments safe.</p>
+          <p class="pebble-moment__lede">Pebble is your kid's quiet check-in friend. They remind you to log your journal, nudge you toward small healthy habits (one more glass of water, a stretch break, an earlier bedtime), and are there to chat when you need to talk something through.</p>
+          <ul class="pebble-moment__points">
+            <li><span aria-hidden="true">💬</span> <strong>Mood-first check-ins.</strong> Pebble asks how you feel before asking what you did.</li>
+            <li><span aria-hidden="true">🛡️</span> <strong>Crisis-safe replies.</strong> Any sign of distress routes to 988 and Crisis Text Line, every time.</li>
+            <li><span aria-hidden="true">⏱️</span> <strong>Auto-deletes in 30 days.</strong> No long-term chat history. No training on your child's words.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== features ===== -->
+    <section id="features" class="section">
+      <div class="container container--wide">
+        <h2 class="section__title">Everything kids need in one happy place.</h2>
+        <p class="section__lede">Ten features, two mini-games, one buddy. All built to teach habits, not just track them.</p>
+
+        <div class="features__grid">
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">💬</div>
+            <h3>Your buddy, Pebble (AI)</h3>
+            <p>Kid-safe, age-appropriate AI buddy. Voice + text, crisis-safe replies built in.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">🥗</div>
+            <h3>Plate Builder</h3>
+            <p>60-second mini-game. Build balanced plates, score combos, learn MyPlate.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">🌙</div>
+            <h3>Sleepy Pebble</h3>
+            <p>Sleep-hygiene trivia game with 4 dream-world levels and daily bedtime missions.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">🐭</div>
+            <h3>Your Buddy's Room</h3>
+            <p>Earn coins, dress up your buddy. 12 skins, 13 accessories, 10 backgrounds.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">📓</div>
+            <h3>Journal &amp; Reflections</h3>
+            <p>Log a behavior, share how you feel, get a personalized note from Pebble.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">📊</div>
+            <h3>Progress Charts</h3>
+            <p>Weekly + monthly trends, per-behavior insights, best-week celebrations.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">🏅</div>
+            <h3>24 Real Achievements</h3>
+            <p>Veggie Master, Rainbow Chef, 7-Day Logger and more. Every habit unlocks something.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">🔥</div>
+            <h3>Daily Streaks</h3>
+            <p>One-tap behavior logging. Live progress ring + pebble nudges to keep you going.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">📚</div>
+            <h3>Pediatric-research backed</h3>
+            <p>Goals based on CDC + AAP guidelines for kids 7-12. Designed with LSU researchers.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">🛡️</div>
+            <h3>Kids-safe by design</h3>
+            <p>COPPA compliant, no third-party ads, no behavioral tracking. Built to Apple Kids category requirements.</p>
+          </article>
+
+          <article class="feature">
+            <div class="feature__icon" aria-hidden="true">✨</div>
+            <h3>More coming soon</h3>
+            <p>From new mini-games to deeper progress tracking, ProudMe is updated constantly to give kids the best app experience.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== announcements ===== -->
+    <section id="updates" class="updates section">
+      <div class="container">
+        <h2 class="section__title">What's new.</h2>
+        <p class="section__lede">Updates and release notes. Newest first.</p>
+
+        <div class="updates__list">
+
+          <article class="announcement announcement--soon" aria-labelledby="ann-v1">
+            <div class="announcement__header">
+              <span class="announcement__version">v1.0 · Coming soon</span>
+              <span class="announcement__date">Target: 2026</span>
+            </div>
+            <h3 class="announcement__title" id="ann-v1">ProudMe v1 launches on iPhone and iPad</h3>
+            <div class="announcement__body">
+              <p>First public release. We're wrapping up Apple App Review prep and IRB approval before flipping the App Store switch.</p>
+              <ul>
+                <li>Your buddy Pebble (AI) with kid-safe, crisis-aware replies (voice + text).</li>
+                <li>Plate Builder and Sleepy Pebble educational mini-games.</li>
+                <li>Daily streak tracking across Activity, Eating, Sleep, and Screen time.</li>
+                <li>24 real achievements, Your Buddy's Room with skins / accessories / backgrounds.</li>
+                <li>Built for kids 7-12, COPPA compliant, built to Apple Kids category requirements.</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="announcement" aria-labelledby="ann-beta">
+            <div class="announcement__header">
+              <span class="announcement__version">Beta · In testing</span>
+              <span class="announcement__date">IRB approved 2026-05-15</span>
+            </div>
+            <h3 class="announcement__title" id="ann-beta">Closed beta with the LSU lab + partner classrooms</h3>
+            <div class="announcement__body">
+              <p>Pebble is running in supervised testing with the LSU Pedagogical Kinesiology Lab and partner elementary classrooms (grades 2 to 6). LSU Institutional Review Board approved the study on 2026-05-15. v1 ships to the App Store once Apple's Kids category review is complete.</p>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== security ===== -->
+    <section id="security" class="info section" aria-labelledby="security-head">
+      <div class="container container--wide">
+        <span class="section__eyebrow">Security</span>
+        <h2 class="section__title" id="security-head">Hardened for kids. Reviewed continuously.</h2>
+        <p class="section__lede">Children's data needs more than a checkbox. Here is what ships behind the scenes, and how we keep proving it.</p>
+        <span class="info__stamp">Last reviewed 2026-05-16</span>
+
+        <div class="info-grid">
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🔐</div>
+            <h3>Encrypted everywhere</h3>
+            <p>HTTPS-only API. Bcrypt cost-12 password hashing. JWT with server-side revocation. iOS Keychain and Android EncryptedSharedPreferences for on-device secrets.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🛡️</div>
+            <h3>Fail-closed AI safety</h3>
+            <p>Every message from Pebble runs through OpenAI's safety classifier. If the classifier is unreachable, we block the message instead of passing it through. Crisis terms route to 988 and Crisis Text Line.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🧪</div>
+            <h3>Ongoing pen testing</h3>
+            <p>Every shipped change is reviewed by an experienced security reviewer before merge. Most recent pass: 8 findings (2 HIGH and 6 MEDIUM) fixed and verified on 2026-05-16.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">📋</div>
+            <h3>Audit trail by design</h3>
+            <p>Every safety event (crisis response, harmful-input redirect, moderation outage) is written to an immutable audit log. IRB-reviewable. Exportable on request.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🔍</div>
+            <h3>Responsible disclosure</h3>
+            <p>Found something? Email <a href="mailto:pklab@lsu.edu">pklab@lsu.edu</a>. We acknowledge within 48 hours and credit security researchers in release notes.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">⚡</div>
+            <h3>Fast patch cycle</h3>
+            <p>Security fixes go from finding to shipped in hours, not weeks. Every release runs the full automated test suite plus a security review pass before it hits production.</p>
+          </article>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===== privacy ===== -->
+    <section id="privacy-section" class="info section info--alt" aria-labelledby="privacy-head">
+      <div class="container container--wide">
+        <span class="section__eyebrow">Privacy</span>
+        <h2 class="section__title" id="privacy-head">Built around the parent, not the advertiser.</h2>
+        <p class="section__lede">No ads, no profiles, no data sold. The least amount of data we need, kept the shortest time it is useful for.</p>
+
+        <div class="info-grid">
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">👨‍👩‍👧</div>
+            <h3>Verifiable parental consent</h3>
+            <p>Required before any account is created. COPPA-compliant flow designed with the LSU Office of General Counsel. Parents control the account, not the child.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🎓</div>
+            <h3>IRB and FERPA oversight</h3>
+            <p>LSU Institutional Review Board approved on 2026-05-15. FERPA-aligned for any classroom partnership. Run out of the LSU Pedagogical Kinesiology Lab.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">⏱️</div>
+            <h3>Your buddy, Pebble's, chats auto-delete</h3>
+            <p>Conversations with the AI buddy are kept for 30 days, then automatically and irreversibly deleted. No long-term chat history, no training on your child's words.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🚫</div>
+            <h3>Zero third-party trackers</h3>
+            <p>No analytics SDKs. No ad networks. No behavioral profiling. The marketing site itself has zero trackers. Verified at every release.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">🧹</div>
+            <h3>Data minimization</h3>
+            <p>We ask for the least we need to make the app work. No phone numbers, no location, no contacts, no photos. Just what each feature genuinely requires.</p>
+          </article>
+          <article class="info-card">
+            <div class="info-card__icon" aria-hidden="true">📤</div>
+            <h3>Parent rights</h3>
+            <p>View, export, or delete your child's data at any time. Email <a href="mailto:pklab@lsu.edu">pklab@lsu.edu</a> and we respond within 7 days, usually same-day.</p>
+          </article>
+        </div>
+
+        <p class="info__footer-note">
+          Read the <a href="privacy.html">full privacy policy</a> for vendor list, retention windows, and complete parent rights.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===== contact ===== -->
+    <section id="contact" class="contact section" aria-labelledby="contact-head">
+      <div class="contact__inner">
+        <div class="contact__copy">
+          <span class="section__eyebrow">Contact</span>
+          <h2 class="section__title" id="contact-head">Have a question? Get in touch.</h2>
+          <p class="contact__lede">For parents, partner schools, press, or anyone interested in the research.</p>
+          <ul class="contact__meta">
+            <li><strong>Lab:</strong> LSU Pedagogical Kinesiology Lab</li>
+            <li><strong>PI:</strong> Dr. Senlin Chen, PhD</li>
+          </ul>
+        </div>
+        <form class="contact__form" id="contact-form" action="https://formspree.io/f/mvzyoqdo" method="POST">
+          <input type="hidden" name="_subject" value="ProudMe contact form submission">
+          <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
+          <label class="contact__field">
+            <span>Your name</span>
+            <input type="text" name="name" required autocomplete="name">
+          </label>
+          <label class="contact__field">
+            <span>Email</span>
+            <input type="email" name="email" required autocomplete="email">
+          </label>
+          <label class="contact__field">
+            <span>Message</span>
+            <textarea name="message" rows="4" required></textarea>
+          </label>
+          <button type="submit" class="cta-pill contact__submit">Send message</button>
+          <p class="contact__hint" id="contact-hint">We reply within a few days.</p>
+          <p class="contact__status" id="contact-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== footer ===== -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer__row">
+      <div>
+        <div class="footer__brand">ProudMe</div>
+        <div>An LSU Pedagogical Kinesiology Lab research project. Led by Dr. Senlin Chen, PhD.</div>
+        <div>© 2026 LSU Pedagogical Kinesiology Lab. All rights reserved.</div>
+      </div>
+      <nav class="footer__links" aria-label="Footer">
+        <a href="#privacy-section">Privacy</a>
+        <a href="#security">Security</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="#contact">Contact us</a>
+      </nav>
+    </div>
+  </footer>
+
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
