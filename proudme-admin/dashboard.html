@@ -52,6 +52,7 @@
         <div class="panel__title">
           <h2 id="status-title">System Status</h2>
           <span class="status-refreshed" id="status-refreshed" hidden></span>
+          <span class="panel__hint panel__hint--auto">Auto-updates every 30s</span>
         </div>
       </header>
       <div id="status-grid" class="status-grid">
@@ -64,8 +65,9 @@
         <div class="panel__title">
           <h2 id="analytics-title">Activity Analytics</h2>
           <span class="muted" id="analytics-window-label"></span>
+          <span class="panel__hint">Manual refresh only</span>
         </div>
-        <button id="analytics-refresh" class="btn btn--ghost btn--small" type="button">Refresh</button>
+        <button id="analytics-refresh" class="btn btn--ghost btn--small" type="button" title="Manual refresh only. System Status polls automatically every 30s; analytics + roster panels stay manual to keep Render free-tier compute low.">Refresh</button>
       </header>
       <div class="analytics-grid">
         <div class="chart-card" id="chart-compliance">

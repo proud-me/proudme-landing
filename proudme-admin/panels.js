@@ -96,6 +96,19 @@ function shortenId(id) {
   return s.length > 10 ? s.slice(-8) : s;
 }
 
+// Round 18.4: render snake_case backend enum values (e.g. "crisis_response",
+// "skipped_no_recipient", "in_app") as proper sentence case ("Crisis response",
+// "Skipped no recipient", "In-app") so the table cells match the rest of the
+// dashboard's copy style instead of leaking raw DB enum strings.
+function prettify(s) {
+  if (s == null) return "—";
+  const str = String(s);
+  if (!str) return "—";
+  return str
+    .replace(/_/g, " ")
+    .replace(/\b[a-z]/, (c) => c.toUpperCase());
+}
+
 // ---------- Shared panel scaffold -----------------------------------------
 
 // Filter spec:
@@ -137,11 +150,19 @@ function createAuditPanel(spec) {
     class: "btn btn--ghost btn--small",
     type: "button",
     onClick: () => refresh(),
+    // Round 18.4: hover tooltip explaining manual-only policy so the
+    // operator does not wonder why this panel is not updating on its
+    // own like System Status does.
+    title: "Manual refresh only. System Status polls automatically every 30s; other panels stay manual to keep Render free-tier compute low.",
   }, ["Refresh"]));
   const header = el("header", { class: "panel__head" }, [
     el("div", { class: "panel__title" }, [
       el("h2", null, [spec.title]),
       headerBadge,
+      // Round 18.4: small inline hint that this panel does not
+      // auto-update. Keeps the operator from staring at stale data
+      // wondering why nothing is moving.
+      el("span", { class: "panel__hint" }, ["Manual refresh only"]),
     ]),
     headerActions,
   ]);
@@ -471,9 +492,9 @@ const SAFETY_PANEL = {
   ],
   columns: [
     { key: "timestamp", label: "When (CT)", render: (r) => fmtTs(r.timestamp) },
-    { key: "action", label: "Action" },
-    { key: "source", label: "Source" },
-    { key: "endpoint", label: "Endpoint" },
+    { key: "action", label: "Action", render: (r) => prettify(r.action) },
+    { key: "source", label: "Source", render: (r) => prettify(r.source) },
+    { key: "endpoint", label: "Endpoint", render: (r) => prettify(r.endpoint) },
     { key: "userId", label: "User", render: (r) => shortenId(r.userId) },
     { key: "categories", label: "Categories", render: (r) => fmtCategories(r.categories) },
   ],
@@ -515,8 +536,8 @@ const DISPATCH_PANEL = {
   ],
   columns: [
     { key: "triggeredAt", label: "Triggered (CT)", render: (r) => fmtTs(r.triggeredAt) },
-    { key: "action", label: "Action" },
-    { key: "status", label: "Status" },
+    { key: "action", label: "Action", render: (r) => prettify(r.action) },
+    { key: "status", label: "Status", render: (r) => prettify(r.status) },
     { key: "userId", label: "User", render: (r) => shortenId(r.userId) },
     { key: "digestToken", label: "Event ID", render: (r) => r.digestToken || "—" },
     { key: "dispatchedAt", label: "Dispatched (CT)", render: (r) => fmtTs(r.dispatchedAt) },
@@ -598,11 +619,11 @@ const CONTACT_PANEL = {
   ],
   columns: [
     { key: "createdAt", label: "Received (CT)", render: (r) => fmtTs(r.createdAt) },
-    { key: "source", label: "Source" },
+    { key: "source", label: "Source", render: (r) => prettify(r.source) },
     { key: "fromName", label: "From", render: (r) => r.fromName || r.fromEmail || "—" },
-    { key: "topic", label: "Topic" },
+    { key: "topic", label: "Topic", render: (r) => prettify(r.topic) },
     { key: "subject", label: "Subject", render: (r) => r.subject || "—" },
-    { key: "status", label: "Status" },
+    { key: "status", label: "Status", render: (r) => prettify(r.status) },
   ],
   detailFields: (r) => [
     ["From email", r.fromEmail],
@@ -611,7 +632,7 @@ const CONTACT_PANEL = {
     ["Topic", r.topic],
     ["Subject", r.subject],
     ["Body", r.body],
-    ["Email dispatched", r.emailDispatched ? "yes" : "no"],
+    ["Email dispatched", r.emailDispatched ? "Yes" : "No"],
     ["Received (ISO)", r.createdAt],
     ["IP (forensics)", r.ip],
     ["User agent", r.userAgent],
@@ -691,12 +712,12 @@ function renderStatus(data) {
   // Lead with the binary health signals operator wants at-a-glance.
   grid.appendChild(statusTile(
     "Mongo",
-    data.mongoConnected ? "connected" : "disconnected",
+    data.mongoConnected ? "Connected" : "Disconnected",
     data.mongoConnected ? "ok" : "err"
   ));
   grid.appendChild(statusTile(
     "Last process error",
-    data.lastProcessErrorAt ? new Date(data.lastProcessErrorAt).toLocaleString("en-US", { timeZone: "America/Chicago" }) : "none",
+    data.lastProcessErrorAt ? new Date(data.lastProcessErrorAt).toLocaleString("en-US", { timeZone: "America/Chicago" }) : "None",
     data.lastProcessErrorAt ? "warn" : "ok"
   ));
   grid.appendChild(statusTile("Uptime", fmtUptime(data.uptime), ""));
@@ -732,7 +753,7 @@ function renderStatus(data) {
 
   const refreshedEl = document.getElementById("status-refreshed");
   if (refreshedEl) {
-    refreshedEl.textContent = "updated " + fmtTs(data.serverTime || new Date().toISOString());
+    refreshedEl.textContent = "Updated " + fmtTs(data.serverTime || new Date().toISOString());
     refreshedEl.removeAttribute("hidden");
   }
 }
@@ -911,7 +932,7 @@ function renderComplianceChart(container, data) {
   const callout = el("div", { class: "chart-card__callout" }, [
     el("span", { class: "chart-card__callout-num" }, [`${pct}%`]),
     el("span", { class: "chart-card__callout-sub" }, [
-      `${today.submitted || 0} of ${today.registered || 0} students logged today`,
+      `${today.submitted || 0} of ${today.registered || 0} students logged behaviors today`,
     ]),
   ]);
   container.appendChild(callout);
@@ -1111,12 +1132,12 @@ function classifyStudent(row, nowMs) {
 }
 
 function fmtRelative(iso, nowMs) {
-  if (!iso) return "never";
+  if (!iso) return "Never";
   const t = new Date(iso).getTime();
   if (isNaN(t)) return "—";
   const diff = nowMs - t;
   const oneDayMs = 24 * 60 * 60 * 1000;
-  if (diff < 60 * 1000) return "just now";
+  if (diff < 60 * 1000) return "Just now";
   if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))} min ago`;
   if (diff < oneDayMs) return `${Math.floor(diff / (60 * 60 * 1000))} h ago`;
   if (diff < 30 * oneDayMs) return `${Math.floor(diff / oneDayMs)} d ago`;
@@ -1172,11 +1193,13 @@ function mountRosterPanel() {
   const refreshBtn = el("button", {
     class: "btn btn--ghost btn--small", type: "button",
     onClick: () => loadRoster(),
+    title: "Manual refresh only. System Status polls automatically every 30s; analytics + roster panels stay manual to keep Render free-tier compute low.",
   }, ["Refresh"]);
   root.appendChild(el("header", { class: "panel__head" }, [
     el("div", { class: "panel__title" }, [
       el("h2", null, ["Students"]),
       countChip,
+      el("span", { class: "panel__hint" }, ["Manual refresh only"]),
     ]),
     el("div", { class: "panel__actions" }, [csvBtn, refreshBtn]),
   ]));

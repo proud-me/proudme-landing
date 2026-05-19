@@ -897,6 +897,27 @@ code {
   flex-wrap: wrap;
 }
 
+/* Round 18.4: small inline hint next to panel titles signaling whether the
+   panel auto-updates or requires the operator to click Refresh. Keeps the
+   "is this data stale?" question off the operator's plate. */
+.panel__hint {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--bone);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.panel__hint--auto {
+  color: var(--ok);
+  background: rgba(46, 125, 91, 0.10);
+}
+
 .panel-badge {
   display: inline-flex;
   align-items: center;
