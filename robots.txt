@@ -1,2 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /proudme-admin/
+
+Sitemap: https://proudme.org/sitemap.xml

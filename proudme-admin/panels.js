@@ -1,0 +1,1628 @@
+"use strict";
+
+// Phase 2 audit panels: AI safety events + counselor dispatches.
+// Each panel reuses the shared filter-chip + load-more pattern below.
+
+// ---------- CSV download helper (Phase 7) --------------------------------
+
+async function downloadAdminCsv(endpoint, filters) {
+  try {
+    const q = new URLSearchParams();
+    if (filters) {
+      for (const k of Object.keys(filters)) {
+        const v = filters[k];
+        if (v != null && v !== "") q.set(k, String(v));
+      }
+    }
+    q.set("format", "csv");
+    q.set("limit", "200");
+    const csvText = await window.ProudMeAdmin.fetchAdmin(endpoint + "?" + q.toString());
+    // fetchAdmin returns text when content-type isn't application/json,
+    // so for CSV we already have a string here. Wrap in a Blob and
+    // simulate a download via a hidden anchor tag.
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    // Filename comes from the endpoint path; backend's Content-Disposition
+    // is the authoritative source but a same-origin <a download> uses the
+    // anchor attr when the response is fetched (not navigated to).
+    const stamp = new Date().toISOString().slice(0, 10);
+    const tail = endpoint.split("/").filter(Boolean).pop() || "export";
+    a.download = `${tail}-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 100);
+  } catch (err) {
+    alert("CSV download failed: " + (err.message || "unknown"));
+  }
+}
+
+// ---------- DOM helpers ---------------------------------------------------
+
+// Creates an element with optional attrs, dataset, and children. Never
+// accepts innerHTML from server data, only text nodes via the children
+// array. Reviewer-noted constraint: SafetyEvent and NotificationDispatch
+// rows include free-form fields (lastError, categories[], etc.) that
+// must render as text, not HTML.
+function el(tag, attrs, children) {
+  const node = document.createElement(tag);
+  if (attrs) {
+    for (const k of Object.keys(attrs)) {
+      if (k === "class") node.className = attrs[k];
+      else if (k === "dataset") {
+        for (const dk of Object.keys(attrs.dataset)) node.dataset[dk] = attrs.dataset[dk];
+      } else if (k.startsWith("on") && typeof attrs[k] === "function") {
+        node.addEventListener(k.slice(2).toLowerCase(), attrs[k]);
+      } else if (attrs[k] != null) {
+        node.setAttribute(k, attrs[k]);
+      }
+    }
+  }
+  if (children) {
+    for (const c of children) {
+      if (c == null || c === false) continue;
+      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+  }
+  return node;
+}
+
+function fmtTs(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  // Central time is the canonical research clock per server.js cron + audit
+  // (workdone Round 16 Item A). Render in CT so the dashboard matches the
+  // counselor digest emails the operator sees.
+  return d.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric", month: "short", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+
+function fmtCategories(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return "—";
+  return arr.join(", ");
+}
+
+function shortenId(id) {
+  if (!id) return "—";
+  const s = String(id);
+  return s.length > 10 ? s.slice(-8) : s;
+}
+
+// ---------- Shared panel scaffold -----------------------------------------
+
+// Filter spec:
+//   { key: "action", label: "Action", options: [{value, label}], group: "exclusive" }
+// where the "All" option is appended automatically as value=null.
+// Date range is rendered separately; userId is a free-text ObjectId field.
+
+function createAuditPanel(spec) {
+  const root = document.getElementById(spec.mountId);
+  if (!root) return;
+
+  const state = {
+    filters: {},
+    offset: 0,
+    limit: 50,
+    rows: [],
+    loading: false,
+    error: null,
+    hasMore: false,
+    // Monotonically incrementing request sequence. Each fetchPage() snapshots
+    // it and bails if the global value has advanced past the snapshot, so a
+    // slow earlier response can't overwrite a faster later one (operator
+    // rapid-flipping filter chips).
+    reqSeq: 0,
+  };
+
+  // --- header ---
+  const headerBadge = el("span", { class: "panel-badge", hidden: "" });
+  const headerActions = el("div", { class: "panel__actions" });
+  if (spec.endpoint) {
+    headerActions.appendChild(el("button", {
+      class: "btn btn--ghost btn--small",
+      type: "button",
+      onClick: () => downloadAdminCsv(spec.endpoint, state.filters),
+      title: "Download the current filter view as CSV",
+    }, ["Download CSV"]));
+  }
+  headerActions.appendChild(el("button", {
+    class: "btn btn--ghost btn--small",
+    type: "button",
+    onClick: () => refresh(),
+  }, ["Refresh"]));
+  const header = el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, [spec.title]),
+      headerBadge,
+    ]),
+    headerActions,
+  ]);
+
+  function updateHeaderBadge() {
+    if (!spec.headerBadge) return;
+    const text = spec.headerBadge(state.rows);
+    if (text) {
+      headerBadge.textContent = text;
+      headerBadge.removeAttribute("hidden");
+    } else {
+      headerBadge.setAttribute("hidden", "");
+    }
+  }
+
+  // --- filters ---
+  const filterRow = el("div", { class: "filters" });
+
+  for (const filter of spec.filters) {
+    const group = el("div", { class: "filter-group" }, [
+      el("span", { class: "filter-group__label" }, [filter.label]),
+    ]);
+    const chips = el("div", { class: "chips" });
+    const options = [{ value: null, label: "All" }, ...filter.options];
+    for (const opt of options) {
+      const chip = el("button", {
+        class: "chip",
+        type: "button",
+        dataset: { value: opt.value == null ? "" : String(opt.value) },
+        onClick: () => {
+          state.filters[filter.key] = opt.value;
+          for (const c of chips.querySelectorAll(".chip")) c.classList.remove("chip--active");
+          chip.classList.add("chip--active");
+          state.offset = 0;
+          state.rows = [];
+          fetchPage();
+        },
+      }, [opt.label]);
+      if (opt.value == null) chip.classList.add("chip--active");
+      chips.appendChild(chip);
+    }
+    group.appendChild(chips);
+    filterRow.appendChild(group);
+  }
+
+  // Date range (since/until)
+  const dateGroup = el("div", { class: "filter-group filter-group--date" }, [
+    el("span", { class: "filter-group__label" }, ["Date range"]),
+    el("div", { class: "date-range" }, [
+      el("label", null, [
+        el("span", { class: "date-range__label" }, ["From"]),
+        (() => {
+          const input = el("input", { type: "datetime-local" });
+          input.addEventListener("change", () => {
+            state.filters.since = input.value ? new Date(input.value).toISOString() : null;
+            state.offset = 0;
+            state.rows = [];
+            fetchPage();
+          });
+          return input;
+        })(),
+      ]),
+      el("label", null, [
+        el("span", { class: "date-range__label" }, ["To"]),
+        (() => {
+          const input = el("input", { type: "datetime-local" });
+          input.addEventListener("change", () => {
+            state.filters.until = input.value ? new Date(input.value).toISOString() : null;
+            state.offset = 0;
+            state.rows = [];
+            fetchPage();
+          });
+          return input;
+        })(),
+      ]),
+    ]),
+  ]);
+  filterRow.appendChild(dateGroup);
+
+  // userId filter (free text, validated client-side)
+  const userIdGroup = el("div", { class: "filter-group filter-group--text" }, [
+    el("span", { class: "filter-group__label" }, ["User ID"]),
+    (() => {
+      const input = el("input", {
+        type: "text",
+        placeholder: "24-char ObjectId",
+        maxlength: "24",
+        class: "filter-input",
+      });
+      const isObjectId = (s) => /^[0-9a-fA-F]{24}$/.test(s);
+      let debounce = null;
+      input.addEventListener("input", () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => {
+          const v = input.value.trim();
+          if (v === "") {
+            state.filters.userId = null;
+          } else if (!isObjectId(v)) {
+            return; // wait for valid input, don't fetch garbage
+          } else {
+            state.filters.userId = v;
+          }
+          state.offset = 0;
+          state.rows = [];
+          fetchPage();
+        }, 400);
+      });
+      return input;
+    })(),
+  ]);
+  filterRow.appendChild(userIdGroup);
+
+  // --- table ---
+  const table = el("table", { class: "audit-table" });
+  const thead = el("thead", null, [
+    el("tr", null, spec.columns.map((c) => el("th", null, [c.label]))),
+  ]);
+  const tbody = el("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  // --- footer ---
+  const footer = el("div", { class: "panel__foot" });
+  const statusEl = el("span", { class: "audit-status" });
+  const loadMoreBtn = el("button", {
+    class: "btn btn--ghost",
+    type: "button",
+    onClick: () => {
+      state.offset += state.limit;
+      fetchPage(true);
+    },
+  }, ["Load more"]);
+  footer.appendChild(statusEl);
+  footer.appendChild(loadMoreBtn);
+
+  // Mount
+  root.classList.add("panel");
+  root.appendChild(header);
+  root.appendChild(filterRow);
+  root.appendChild(el("div", { class: "table-wrap" }, [table]));
+  root.appendChild(footer);
+
+  // --- render helpers ---
+  function renderRows() {
+    tbody.replaceChildren();
+    if (state.rows.length === 0 && !state.loading) {
+      const td = el("td", { colspan: String(spec.columns.length), class: "audit-empty" }, [
+        state.error ? "Error: " + state.error : `No ${spec.emptyLabel} match these filters.`,
+      ]);
+      tbody.appendChild(el("tr", null, [td]));
+      return;
+    }
+    for (const row of state.rows) {
+      const tr = el("tr", {
+        class: "audit-row",
+        tabindex: "0",
+        role: "button",
+        "aria-expanded": "false",
+        "aria-label": "Expand row details",
+      });
+      for (const col of spec.columns) {
+        const value = col.render ? col.render(row) : row[col.key];
+        tr.appendChild(el("td", null, [value == null ? "—" : String(value)]));
+      }
+      const toggle = () => {
+        const next = tr.nextSibling;
+        if (next && next.classList && next.classList.contains("audit-detail")) {
+          next.remove();
+          tr.classList.remove("audit-row--expanded");
+          tr.setAttribute("aria-expanded", "false");
+        } else {
+          tr.classList.add("audit-row--expanded");
+          tr.setAttribute("aria-expanded", "true");
+          tr.parentNode.insertBefore(renderDetail(row), tr.nextSibling);
+        }
+      };
+      tr.addEventListener("click", toggle);
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle();
+        }
+      });
+      tbody.appendChild(tr);
+    }
+  }
+
+  function renderDetail(row) {
+    const fields = spec.detailFields(row);
+    const dl = el("dl", { class: "audit-detail__list" });
+    for (const [k, v] of fields) {
+      dl.appendChild(el("dt", null, [k]));
+      // Multi-line body fields render as <pre> so newlines survive.
+      if (k === "Body" || k === "Message") {
+        dl.appendChild(el("dd", null, [
+          el("pre", { class: "audit-detail__pre" }, [v == null ? "—" : String(v)]),
+        ]));
+      } else {
+        dl.appendChild(el("dd", null, [v == null ? "—" : String(v)]));
+      }
+    }
+    const children = [dl];
+    if (typeof spec.detailActions === "function") {
+      const actions = spec.detailActions(row, { refresh });
+      if (actions && actions.length > 0) {
+        const actionRow = el("div", { class: "audit-detail__actions" });
+        for (const a of actions) {
+          actionRow.appendChild(el("button", {
+            class: "btn btn--small " + (a.primary ? "btn--primary" : "btn--ghost"),
+            type: "button",
+            onClick: a.onClick,
+          }, [a.label]));
+        }
+        children.push(actionRow);
+      }
+    }
+    return el("tr", { class: "audit-detail" }, [
+      el("td", { colspan: String(spec.columns.length) }, children),
+    ]);
+  }
+
+  function renderStatus() {
+    if (state.loading) {
+      statusEl.textContent = "Loading…";
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.style.display = "none";
+      return;
+    }
+    if (state.error) {
+      statusEl.textContent = "Error.";
+      loadMoreBtn.disabled = false;
+      loadMoreBtn.style.display = "none";
+      return;
+    }
+    const showing = state.rows.length;
+    const suffix = state.hasMore ? " (more available)" : "";
+    statusEl.textContent = showing === 0 ? "" : `Showing ${showing}${suffix}`;
+    loadMoreBtn.style.display = state.hasMore ? "" : "none";
+    loadMoreBtn.disabled = false;
+  }
+
+  // --- fetch ---
+  async function fetchPage(append) {
+    const seq = ++state.reqSeq;
+    state.loading = true;
+    state.error = null;
+    if (!append) {
+      tbody.replaceChildren();
+    }
+    renderStatus();
+    try {
+      const q = new URLSearchParams();
+      for (const k of Object.keys(state.filters)) {
+        const v = state.filters[k];
+        if (v != null && v !== "") q.set(k, String(v));
+      }
+      q.set("limit", String(state.limit));
+      if (state.offset > 0) q.set("offset", String(state.offset));
+      const data = await window.ProudMeAdmin.fetchAdmin(
+        spec.endpoint + "?" + q.toString()
+      );
+      // Stale response, a newer fetchPage() has fired since we started.
+      // Drop this result, the in-flight request will repaint.
+      if (seq !== state.reqSeq) return;
+      const newRows = data[spec.responseKey] || [];
+      state.rows = append ? state.rows.concat(newRows) : newRows;
+      state.hasMore = data.hasMore === true;
+      state.loading = false;
+      renderRows();
+      renderStatus();
+      updateHeaderBadge();
+    } catch (err) {
+      if (seq !== state.reqSeq) return;
+      state.loading = false;
+      state.error = err.message || "Request failed.";
+      renderRows();
+      renderStatus();
+    }
+  }
+
+  function refresh() {
+    state.offset = 0;
+    state.rows = [];
+    fetchPage();
+  }
+
+  // Initial load
+  fetchPage();
+}
+
+// ---------- Panel specs ---------------------------------------------------
+
+const SAFETY_PANEL = {
+  mountId: "safety-panel",
+  title: "AI Safety Audit",
+  endpoint: "/admin/safety-events",
+  responseKey: "events",
+  emptyLabel: "safety events",
+  filters: [
+    {
+      key: "action",
+      label: "Action",
+      options: [
+        { value: "crisis_response", label: "Crisis" },
+        { value: "harmful_redirect", label: "Redirect" },
+        { value: "output_swapped", label: "Output swapped" },
+        { value: "moderation_degraded", label: "Mod degraded" },
+      ],
+    },
+    {
+      key: "source",
+      label: "Source",
+      options: [
+        { value: "input", label: "Input" },
+        { value: "output", label: "Output" },
+      ],
+    },
+    {
+      key: "endpoint",
+      label: "Endpoint",
+      options: [
+        { value: "chat_session", label: "Chat session" },
+        { value: "chatbot", label: "Chatbot" },
+        { value: "chatbot_screentime", label: "Screen-time" },
+      ],
+    },
+  ],
+  columns: [
+    { key: "timestamp", label: "When (CT)", render: (r) => fmtTs(r.timestamp) },
+    { key: "action", label: "Action" },
+    { key: "source", label: "Source" },
+    { key: "endpoint", label: "Endpoint" },
+    { key: "userId", label: "User", render: (r) => shortenId(r.userId) },
+    { key: "categories", label: "Categories", render: (r) => fmtCategories(r.categories) },
+  ],
+  detailFields: (r) => [
+    ["Full user ID", r.userId],
+    ["Session ID", r.sessionId],
+    ["Categories", fmtCategories(r.categories)],
+    ["Timestamp (ISO)", r.timestamp],
+  ],
+};
+
+const DISPATCH_PANEL = {
+  mountId: "dispatch-panel",
+  title: "Counselor Dispatch Queue",
+  endpoint: "/admin/notification-dispatches",
+  responseKey: "dispatches",
+  emptyLabel: "dispatches",
+  filters: [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { value: "queued", label: "Queued" },
+        { value: "dispatched", label: "Dispatched" },
+        { value: "failed", label: "Failed" },
+        { value: "skipped_no_recipient", label: "No recipient" },
+      ],
+    },
+    {
+      key: "action",
+      label: "Action",
+      options: [
+        { value: "crisis_response", label: "Crisis" },
+        { value: "harmful_redirect", label: "Redirect" },
+        { value: "output_swapped", label: "Output swapped" },
+        { value: "moderation_degraded", label: "Mod degraded" },
+      ],
+    },
+  ],
+  columns: [
+    { key: "triggeredAt", label: "Triggered (CT)", render: (r) => fmtTs(r.triggeredAt) },
+    { key: "action", label: "Action" },
+    { key: "status", label: "Status" },
+    { key: "userId", label: "User", render: (r) => shortenId(r.userId) },
+    { key: "digestToken", label: "Event ID", render: (r) => r.digestToken || "—" },
+    { key: "dispatchedAt", label: "Dispatched (CT)", render: (r) => fmtTs(r.dispatchedAt) },
+  ],
+  detailFields: (r) => [
+    ["Full user ID", r.userId],
+    ["Session ID", r.sessionId],
+    ["Event ID (digestToken)", r.digestToken],
+    ["Triggered (ISO)", r.triggeredAt],
+    ["Dispatched (ISO)", r.dispatchedAt],
+    ["Last error", r.lastError],
+  ],
+};
+
+// Contact-specific helpers. Defense against mailto header injection
+// (Outlook desktop historically decodes %0A in `subject=` into a literal
+// newline that some clients then parse as a header continuation, e.g.
+// `\nBcc: attacker@example.com`). Body is intentionally newline-tolerant
+// per RFC 6068 (multi-line bodies are the spec'd use case), so the body
+// segment doesn't need control-char stripping, just encodeURIComponent.
+function stripCtrl(s) {
+  return String(s || "").replace(/[\r\n\t\x00-\x1f\x7f]+/g, " ");
+}
+
+function buildReplyMailto(row) {
+  const cleanTo = stripCtrl(row.fromEmail).slice(0, 320);
+  const cleanSubject =
+    "Re: " + stripCtrl(row.subject || row.topic || "ProudMe contact").slice(0, 200);
+  const to = encodeURIComponent(cleanTo);
+  const subject = encodeURIComponent(cleanSubject);
+  const quoted = (row.body || "")
+    .split("\n")
+    .map((line) => "> " + line)
+    .join("\n");
+  const bodyText =
+    "Hi" + (row.fromName ? " " + stripCtrl(row.fromName) : "") + ",\n\n\n\n" +
+    "On " + new Date(row.createdAt).toString() + " you wrote:\n" +
+    quoted;
+  const body = encodeURIComponent(bodyText);
+  return `mailto:${to}?subject=${subject}&body=${body}`;
+}
+
+async function setContactStatus(row, nextStatus, refresh) {
+  try {
+    await window.ProudMeAdmin.fetchAdmin("/admin/contact-messages/" + row._id, {
+      method: "PATCH",
+      body: { status: nextStatus },
+    });
+    refresh();
+  } catch (err) {
+    alert("Couldn't update status: " + (err.message || "request failed"));
+  }
+}
+
+const CONTACT_PANEL = {
+  mountId: "contact-panel",
+  title: "Contact Submissions",
+  endpoint: "/admin/contact-messages",
+  responseKey: "messages",
+  emptyLabel: "contact messages",
+  filters: [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { value: "new", label: "New" },
+        { value: "read", label: "Read" },
+        { value: "archived", label: "Archived" },
+      ],
+    },
+    {
+      key: "source",
+      label: "Source",
+      options: [
+        { value: "landing", label: "Landing" },
+        { value: "in_app", label: "In-app" },
+      ],
+    },
+  ],
+  columns: [
+    { key: "createdAt", label: "Received (CT)", render: (r) => fmtTs(r.createdAt) },
+    { key: "source", label: "Source" },
+    { key: "fromName", label: "From", render: (r) => r.fromName || r.fromEmail || "—" },
+    { key: "topic", label: "Topic" },
+    { key: "subject", label: "Subject", render: (r) => r.subject || "—" },
+    { key: "status", label: "Status" },
+  ],
+  detailFields: (r) => [
+    ["From email", r.fromEmail],
+    ["From name", r.fromName],
+    ["User ID", r.userId],
+    ["Topic", r.topic],
+    ["Subject", r.subject],
+    ["Body", r.body],
+    ["Email dispatched", r.emailDispatched ? "yes" : "no"],
+    ["Received (ISO)", r.createdAt],
+    ["IP (forensics)", r.ip],
+    ["User agent", r.userAgent],
+  ],
+  detailActions: (r, panel) => {
+    const acts = [];
+    if (r.status === "new") {
+      acts.push({
+        label: "Mark as read",
+        primary: false,
+        onClick: () => setContactStatus(r, "read", panel.refresh),
+      });
+    }
+    if (r.status !== "archived") {
+      acts.push({
+        label: "Archive",
+        primary: false,
+        onClick: () => setContactStatus(r, "archived", panel.refresh),
+      });
+    }
+    if (r.status === "archived") {
+      acts.push({
+        label: "Reopen",
+        primary: false,
+        onClick: () => setContactStatus(r, "read", panel.refresh),
+      });
+    }
+    acts.push({
+      label: "Reply via email",
+      primary: true,
+      onClick: () => {
+        // Round 18.1 reviewer fix: window.location.href = "mailto:..."
+        // unloads the dashboard while the OS handler fires, so the
+        // operator loses their table state. window.open with target
+        // _blank + noopener fires the mail handler without navigating
+        // the current window. noopener also blocks Window.opener
+        // back-references just in case anything weird is registered as
+        // the mailto handler.
+        window.open(buildReplyMailto(r), "_blank", "noopener");
+      },
+    });
+    return acts;
+  },
+  headerBadge: (rows) => {
+    const unread = rows.filter((r) => r.status === "new").length;
+    return unread > 0 ? `${unread} new` : "";
+  },
+};
+
+// ---------- System Status panel (Phase 3) --------------------------------
+
+const STATUS_POLL_MS = 30 * 1000;
+
+function fmtUptime(seconds) {
+  if (typeof seconds !== "number" || !isFinite(seconds)) return "—";
+  const s = Math.max(0, Math.round(seconds));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function statusTile(label, value, kind) {
+  return el("div", { class: "status-tile" + (kind ? " status-tile--" + kind : "") }, [
+    el("span", { class: "status-tile__label" }, [label]),
+    el("span", { class: "status-tile__value" }, [value]),
+  ]);
+}
+
+function renderStatus(data) {
+  const grid = document.getElementById("status-grid");
+  if (!grid) return;
+  grid.replaceChildren();
+
+  // Lead with the binary health signals operator wants at-a-glance.
+  grid.appendChild(statusTile(
+    "Mongo",
+    data.mongoConnected ? "connected" : "disconnected",
+    data.mongoConnected ? "ok" : "err"
+  ));
+  grid.appendChild(statusTile(
+    "Last process error",
+    data.lastProcessErrorAt ? new Date(data.lastProcessErrorAt).toLocaleString("en-US", { timeZone: "America/Chicago" }) : "none",
+    data.lastProcessErrorAt ? "warn" : "ok"
+  ));
+  grid.appendChild(statusTile("Uptime", fmtUptime(data.uptime), ""));
+  grid.appendChild(statusTile("Version", data.renderVersion ? String(data.renderVersion).slice(0, 7) : "—", ""));
+
+  // Counts.
+  grid.appendChild(statusTile(
+    "Registered users",
+    data.registeredUsers == null ? "—" : String(data.registeredUsers),
+    ""
+  ));
+  grid.appendChild(statusTile(
+    "Safety events 24h",
+    data.activeSafetyEvents24h == null ? "—" : String(data.activeSafetyEvents24h),
+    data.activeSafetyEvents24h > 0 ? "warn" : ""
+  ));
+  grid.appendChild(statusTile(
+    "Queued dispatches",
+    data.queuedDispatches == null ? "—" : String(data.queuedDispatches),
+    data.queuedDispatches > 0 ? "warn" : ""
+  ));
+  grid.appendChild(statusTile(
+    "Unread contact",
+    data.unreadContactMessages == null ? "—" : String(data.unreadContactMessages),
+    data.unreadContactMessages > 0 ? "warn" : ""
+  ));
+  const usage = data.dailyAiUsageToday || {};
+  grid.appendChild(statusTile(
+    "AI tokens today",
+    typeof usage.totalTokens === "number" ? usage.totalTokens.toLocaleString() : "—",
+    ""
+  ));
+
+  const refreshedEl = document.getElementById("status-refreshed");
+  if (refreshedEl) {
+    refreshedEl.textContent = "updated " + fmtTs(data.serverTime || new Date().toISOString());
+    refreshedEl.removeAttribute("hidden");
+  }
+}
+
+let statusPollTimer = null;
+// Monotonic request sequence so rapid hide/show flips can't have a
+// later-issued fetch overwritten by an earlier resolved one. Same
+// pattern as the audit panels' state.reqSeq.
+let statusReqSeq = 0;
+
+async function pollStatus() {
+  const seq = ++statusReqSeq;
+  try {
+    const data = await window.ProudMeAdmin.fetchAdmin("/admin/system-status");
+    if (seq !== statusReqSeq) return;
+    renderStatus(data);
+  } catch (err) {
+    if (seq !== statusReqSeq) return;
+    const grid = document.getElementById("status-grid");
+    if (grid) {
+      grid.replaceChildren();
+      const tile = el("div", { class: "status-tile status-tile--err" }, [
+        "Status fetch failed: " + (err.message || "unknown"),
+      ]);
+      grid.appendChild(tile);
+    }
+  }
+}
+
+// Named handler + idempotent registration so a future re-mountAll()
+// (session refresh, etc.) can't stack visibilitychange listeners.
+let visListenerBound = false;
+function onStatusVisibilityChange() {
+  if (document.visibilityState === "visible") pollStatus();
+}
+
+function startStatusPolling() {
+  if (statusPollTimer) clearInterval(statusPollTimer);
+  statusPollTimer = setInterval(() => {
+    // Pause polling while backgrounded so we don't burn Render free-tier
+    // budget on a tab nobody is looking at.
+    if (document.visibilityState === "visible") pollStatus();
+  }, STATUS_POLL_MS);
+  if (!visListenerBound) {
+    document.addEventListener("visibilitychange", onStatusVisibilityChange);
+    visListenerBound = true;
+  }
+}
+
+// Round 18.1 reviewer fix: app.js logout() previously cleared the
+// session but never stopped this interval, so the timer kept firing
+// /admin/system-status, kept getting 401 because the token was now
+// revoked, and the fetchAdmin 401 handler kept calling
+// redirectToLogin in a tight loop until navigation actually landed.
+// Exposed on window.ProudMeAdmin so app.js can call it from logout().
+function stopStatusPolling() {
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer);
+    statusPollTimer = null;
+  }
+  if (visListenerBound) {
+    document.removeEventListener("visibilitychange", onStatusVisibilityChange);
+    visListenerBound = false;
+  }
+  // Bump the seq so any in-flight pollStatus() resolves into the
+  // discard branch (seq !== statusReqSeq) instead of touching the DOM
+  // after logout.
+  statusReqSeq++;
+}
+
+// ---------- Activity Analytics (Phase 4) ---------------------------------
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgEl(tag, attrs, children) {
+  const node = document.createElementNS(SVG_NS, tag);
+  if (attrs) {
+    for (const k of Object.keys(attrs)) {
+      if (attrs[k] != null) node.setAttribute(k, attrs[k]);
+    }
+  }
+  if (children) {
+    for (const c of children) {
+      if (c == null || c === false) continue;
+      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+  }
+  return node;
+}
+
+// Bar chart for time-of-day. 24 bins, x-axis is the hour (0-23), y-axis
+// is heartbeat count. Renders 4 y-axis tick lines for scale reference.
+function renderTimeOfDayChart(container, histogram) {
+  container.replaceChildren();
+  const values = [];
+  for (let h = 0; h < 24; h++) values.push(histogram[String(h)] || 0);
+  const total = values.reduce((s, v) => s + v, 0);
+
+  const W = 800;
+  const H = 220;
+  const padL = 36, padR = 14, padT = 14, padB = 28;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const max = Math.max(1, ...values);
+
+  // Round max up to next "nice" number for axis labels.
+  const niceMax = (function () {
+    if (max <= 5) return Math.ceil(max);
+    const mag = Math.pow(10, Math.floor(Math.log10(max)));
+    const norm = max / mag;
+    if (norm <= 1) return mag;
+    if (norm <= 2) return 2 * mag;
+    if (norm <= 5) return 5 * mag;
+    return 10 * mag;
+  })();
+
+  const svg = svgEl("svg", {
+    viewBox: `0 0 ${W} ${H}`,
+    role: "img",
+    "aria-label": "Heartbeat count by hour of day",
+    class: "chart-svg",
+  });
+
+  // Y-axis grid + labels (4 ticks).
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + innerH - (innerH * i) / 4;
+    const v = Math.round((niceMax * i) / 4);
+    svg.appendChild(svgEl("line", {
+      x1: padL, y1: y, x2: W - padR, y2: y,
+      stroke: "rgba(60, 50, 147, 0.08)", "stroke-width": 1,
+    }));
+    svg.appendChild(svgEl("text", {
+      x: padL - 6, y: y + 4, "text-anchor": "end",
+      "font-size": 10, fill: "#8B88A8",
+    }, [String(v)]));
+  }
+
+  // Bars.
+  const barW = innerW / 24;
+  for (let h = 0; h < 24; h++) {
+    const v = values[h];
+    const barH = (v / niceMax) * innerH;
+    const x = padL + h * barW;
+    const y = padT + innerH - barH;
+    svg.appendChild(svgEl("rect", {
+      x: x + 2, y: y, width: Math.max(0, barW - 4), height: barH,
+      fill: "#5040AE", rx: 2, ry: 2,
+    }, [svgEl("title", null, [`${h}:00 (CT) — ${v} heartbeat${v === 1 ? "" : "s"}`])]));
+    // X labels every 4 hours.
+    if (h % 4 === 0) {
+      svg.appendChild(svgEl("text", {
+        x: x + barW / 2, y: H - 8, "text-anchor": "middle",
+        "font-size": 10, fill: "#8B88A8",
+      }, [String(h)]));
+    }
+  }
+
+  container.appendChild(svg);
+  container.appendChild(el("p", { class: "chart-card__caption" }, [
+    total === 0
+      ? "No heartbeats yet. The Flutter app posts /session/heartbeat once per minute while foregrounded; this chart fills in after deploy."
+      : `${total.toLocaleString()} heartbeats over the last 7 days.`,
+  ]));
+}
+
+// Line chart for daily behavior compliance. 7 data points, x-axis is
+// the date (M/D), y-axis is the percentage of registered users who
+// logged at least one Behavior that day.
+function renderComplianceChart(container, data) {
+  container.replaceChildren();
+  const points = data.last7Days || [];
+  const today = data.todayCompliance || {};
+
+  // Big-number callout on top.
+  const pct = Math.round((today.rate || 0) * 100);
+  const callout = el("div", { class: "chart-card__callout" }, [
+    el("span", { class: "chart-card__callout-num" }, [`${pct}%`]),
+    el("span", { class: "chart-card__callout-sub" }, [
+      `${today.submitted || 0} of ${today.registered || 0} students logged today`,
+    ]),
+  ]);
+  container.appendChild(callout);
+
+  if (points.length < 2) {
+    container.appendChild(el("p", { class: "chart-card__caption" }, [
+      "Need at least 2 days of data to draw the trend line.",
+    ]));
+    return;
+  }
+
+  const W = 380;
+  const H = 140;
+  const padL = 30, padR = 12, padT = 14, padB = 24;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const svg = svgEl("svg", {
+    viewBox: `0 0 ${W} ${H}`,
+    role: "img",
+    "aria-label": "Daily compliance rate, last 7 days",
+    class: "chart-svg",
+  });
+
+  // Y-axis grid + labels at 0/50/100%.
+  for (const p of [0, 50, 100]) {
+    const y = padT + innerH - (innerH * p) / 100;
+    svg.appendChild(svgEl("line", {
+      x1: padL, y1: y, x2: W - padR, y2: y,
+      stroke: "rgba(60, 50, 147, 0.08)", "stroke-width": 1,
+    }));
+    svg.appendChild(svgEl("text", {
+      x: padL - 4, y: y + 3, "text-anchor": "end",
+      "font-size": 9, fill: "#8B88A8",
+    }, [p + "%"]));
+  }
+
+  // Polyline of rates.
+  const stepX = innerW / (points.length - 1);
+  const coords = points.map((p, i) => {
+    const x = padL + i * stepX;
+    const y = padT + innerH - (innerH * (p.rate || 0));
+    return { x, y, rate: p.rate, date: p.date };
+  });
+  svg.appendChild(svgEl("polyline", {
+    fill: "none",
+    stroke: "#5040AE",
+    "stroke-width": 2,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    points: coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" "),
+  }));
+  // Dots + tooltips + x-labels.
+  for (let i = 0; i < coords.length; i++) {
+    const c = coords[i];
+    svg.appendChild(svgEl("circle", {
+      cx: c.x, cy: c.y, r: 3, fill: "#5040AE",
+    }, [svgEl("title", null, [`${c.date} — ${Math.round(c.rate * 100)}%`])]));
+    if (i === 0 || i === coords.length - 1 || i % 2 === 0) {
+      const short = String(c.date).split("/").slice(0, 2).join("/");
+      svg.appendChild(svgEl("text", {
+        x: c.x, y: H - 6, "text-anchor": "middle",
+        "font-size": 9, fill: "#8B88A8",
+      }, [short]));
+    }
+  }
+
+  container.appendChild(svg);
+}
+
+// Big stat card for session duration P50/P95.
+function renderDurationCard(container, data) {
+  container.replaceChildren();
+  const d = data || {};
+  const sessionCount = d.sessionCount || 0;
+  const shortVisits = d.shortVisits || 0;
+  if (sessionCount === 0 && shortVisits === 0) {
+    container.appendChild(el("p", { class: "chart-card__caption chart-card__caption--big" }, [
+      "No sessions captured yet. Heartbeats kick in after the Flutter app ships the /session/heartbeat call.",
+    ]));
+    return;
+  }
+  container.appendChild(el("div", { class: "duration-stats" }, [
+    el("div", { class: "duration-stat" }, [
+      el("span", { class: "duration-stat__num" }, [`${d.p50Minutes != null ? d.p50Minutes : "—"}`]),
+      el("span", { class: "duration-stat__unit" }, ["min"]),
+      el("span", { class: "duration-stat__label" }, ["P50 (median)"]),
+    ]),
+    el("div", { class: "duration-stat" }, [
+      el("span", { class: "duration-stat__num" }, [`${d.p95Minutes != null ? d.p95Minutes : "—"}`]),
+      el("span", { class: "duration-stat__unit" }, ["min"]),
+      el("span", { class: "duration-stat__label" }, ["P95"]),
+    ]),
+  ]));
+  const captionParts = [`${sessionCount.toLocaleString()} session${sessionCount === 1 ? "" : "s"}`];
+  if (shortVisits > 0) {
+    captionParts.push(`${shortVisits.toLocaleString()} brief visit${shortVisits === 1 ? "" : "s"}`);
+  }
+  container.appendChild(el("p", { class: "chart-card__caption" }, [
+    captionParts.join(" + ") + " over the last 7 days. Brief visits = a single heartbeat (likely < 1 min, excluded from P50/P95 to avoid bias)."
+  ]));
+}
+
+async function loadAnalytics() {
+  const usageEl = document.getElementById("chart-tod");
+  const durationEl = document.getElementById("chart-duration");
+  const complianceEl = document.getElementById("chart-compliance");
+  const windowLabel = document.getElementById("analytics-window-label");
+
+  const setLoading = (containerEl) => {
+    if (!containerEl) return;
+    const body = containerEl.querySelector(".chart-card__body");
+    if (body) {
+      body.replaceChildren();
+      body.classList.add("chart-card__body--placeholder");
+      body.textContent = "Loading…";
+    }
+  };
+  setLoading(usageEl);
+  setLoading(durationEl);
+  setLoading(complianceEl);
+
+  const renderError = (containerEl, msg) => {
+    if (!containerEl) return;
+    const body = containerEl.querySelector(".chart-card__body");
+    if (body) {
+      body.replaceChildren();
+      body.classList.remove("chart-card__body--placeholder");
+      body.appendChild(el("p", { class: "chart-card__caption chart-card__caption--err" }, [msg]));
+    }
+  };
+  const renderInto = (containerEl, fn) => {
+    if (!containerEl) return;
+    const body = containerEl.querySelector(".chart-card__body");
+    if (body) {
+      body.classList.remove("chart-card__body--placeholder");
+      fn(body);
+    }
+  };
+
+  const [usageR, complianceR] = await Promise.all([
+    window.ProudMeAdmin.fetchAdmin("/admin/analytics/usage").then(
+      (v) => ({ ok: true, v }),
+      (e) => ({ ok: false, e })
+    ),
+    window.ProudMeAdmin.fetchAdmin("/admin/analytics/compliance").then(
+      (v) => ({ ok: true, v }),
+      (e) => ({ ok: false, e })
+    ),
+  ]);
+
+  if (usageR.ok) {
+    renderInto(usageEl, (body) => renderTimeOfDayChart(body, usageR.v.timeOfDayHistogram || {}));
+    renderInto(durationEl, (body) => renderDurationCard(body, usageR.v.sessionDurationP50P95 || {}));
+    if (windowLabel) windowLabel.textContent = "· last " + (usageR.v.windowDays || 7) + " days";
+  } else {
+    renderError(usageEl, "Failed to load usage analytics: " + (usageR.e.message || "unknown"));
+    renderError(durationEl, "Failed to load usage analytics.");
+  }
+
+  if (complianceR.ok) {
+    renderInto(complianceEl, (body) => renderComplianceChart(body, complianceR.v));
+  } else {
+    renderError(complianceEl, "Failed to load compliance analytics: " + (complianceR.e.message || "unknown"));
+  }
+}
+
+function mountAnalytics() {
+  const refreshBtn = document.getElementById("analytics-refresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", () => loadAnalytics());
+  loadAnalytics();
+}
+
+// ---------- Registered Students Roster (Phase 5) -------------------------
+
+// Status badge logic. The plan asks for:
+//   green  -> logged in today AND submitted behavior today
+//   yellow -> logged in today, no behavior submitted
+//   orange -> last active in last 7 days, not today
+//   red    -> last active > 7 days ago, or never
+// Plus a special "never" tile color (same as red) for users without
+// any SessionEvent at all in the 90-day window.
+function classifyStudent(row, nowMs) {
+  const last = row.lastLoginAt ? new Date(row.lastLoginAt).getTime() : null;
+  const submitted = !!row.todaySubmittedBehavior;
+  if (last == null) return { kind: "never", label: "Never logged in" };
+  const ageMs = nowMs - last;
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const sevenDaysMs = 7 * oneDayMs;
+  if (ageMs <= oneDayMs) {
+    return submitted
+      ? { kind: "ok", label: "Active today + submitted" }
+      : { kind: "warn", label: "Active today, no submission" };
+  }
+  if (ageMs <= sevenDaysMs) return { kind: "stale", label: "Active in last 7 days" };
+  return { kind: "cold", label: "Inactive > 7 days" };
+}
+
+function fmtRelative(iso, nowMs) {
+  if (!iso) return "never";
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return "—";
+  const diff = nowMs - t;
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  if (diff < 60 * 1000) return "just now";
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))} min ago`;
+  if (diff < oneDayMs) return `${Math.floor(diff / (60 * 60 * 1000))} h ago`;
+  if (diff < 30 * oneDayMs) return `${Math.floor(diff / oneDayMs)} d ago`;
+  return new Date(t).toLocaleDateString("en-US", { timeZone: "America/Chicago" });
+}
+
+function fmtCreatedAt(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric", month: "short", day: "numeric",
+  });
+}
+
+const rosterState = {
+  allRows: [],
+  groupBy: "none", // "none" | "school"
+  search: "",
+  schoolFilter: "",
+  gradeFilter: "",
+  loading: false,
+  error: null,
+};
+
+// Render the static panel chrome ONCE on mount. Re-renders only refresh
+// the table body, the filter dropdowns, and the count chip in the header.
+function mountRosterPanel() {
+  const root = document.getElementById("roster-panel");
+  if (!root) return;
+  root.classList.add("panel");
+  root.replaceChildren();
+
+  const countChip = el("span", { class: "muted", id: "roster-count" });
+  const csvBtn = el("button", {
+    class: "btn btn--ghost btn--small",
+    type: "button",
+    title: "Download students roster as CSV",
+    // Round 18.1 reviewer fix: previously this exported the entire
+    // roster every time, ignoring the school/grade chips the operator
+    // had set on the visible table. Now we pipe the same filters the
+    // backend can honor server-side (schoolName, gradeLevel) so an
+    // operator looking at one school exports only that school. The
+    // search box stays client-side, so a name filter still exports
+    // beyond the visible filter; that is fine because it surfaces
+    // every record matching the school+grade scope.
+    onClick: () => downloadAdminCsv("/admin/users", {
+      schoolName: rosterState.schoolFilter || undefined,
+      gradeLevel: rosterState.gradeFilter || undefined,
+    }),
+  }, ["Download CSV"]);
+  const refreshBtn = el("button", {
+    class: "btn btn--ghost btn--small", type: "button",
+    onClick: () => loadRoster(),
+  }, ["Refresh"]);
+  root.appendChild(el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, ["Students"]),
+      countChip,
+    ]),
+    el("div", { class: "panel__actions" }, [csvBtn, refreshBtn]),
+  ]));
+
+  root.appendChild(el("div", { class: "roster-banner" }, [
+    el("strong", null, ["Internal use only."]),
+    " Most PII-rich surface in the dashboard. Don't screenshot. Email is hidden until you click Reveal.",
+  ]));
+
+  // Controls row.
+  const searchInput = el("input", {
+    type: "search",
+    class: "filter-input roster-search",
+    placeholder: "Search name or email",
+    autocomplete: "off",
+  });
+  searchInput.addEventListener("input", () => {
+    rosterState.search = String(searchInput.value || "").toLowerCase().trim();
+    renderRosterTable();
+  });
+  const schoolSelect = el("select", { class: "filter-input", id: "roster-school" });
+  schoolSelect.addEventListener("change", () => {
+    rosterState.schoolFilter = schoolSelect.value;
+    renderRosterTable();
+  });
+  const gradeSelect = el("select", { class: "filter-input", id: "roster-grade" });
+  gradeSelect.addEventListener("change", () => {
+    rosterState.gradeFilter = gradeSelect.value;
+    renderRosterTable();
+  });
+  const groupToggle = el("div", { class: "chips" });
+  for (const opt of [{ v: "none", l: "Flat list" }, { v: "school", l: "Group by school" }]) {
+    const chip = el("button", {
+      class: "chip" + (opt.v === "none" ? " chip--active" : ""),
+      type: "button",
+      onClick: () => {
+        rosterState.groupBy = opt.v;
+        for (const c of groupToggle.querySelectorAll(".chip")) c.classList.remove("chip--active");
+        chip.classList.add("chip--active");
+        renderRosterTable();
+      },
+    }, [opt.l]);
+    groupToggle.appendChild(chip);
+  }
+
+  root.appendChild(el("div", { class: "roster-controls" }, [
+    el("div", { class: "roster-controls__row" }, [
+      searchInput,
+      schoolSelect,
+      gradeSelect,
+    ]),
+    el("div", { class: "roster-controls__row" }, [
+      el("span", { class: "filter-group__label" }, ["View"]),
+      groupToggle,
+    ]),
+  ]));
+
+  const tableWrap = el("div", { class: "table-wrap", id: "roster-table-wrap" });
+  root.appendChild(tableWrap);
+
+  // Side-drawer wiring (the markup lives in dashboard.html so the focus
+  // trap and the backdrop can sit outside <main>).
+  const drawer = document.getElementById("roster-drawer");
+  const drawerBackdrop = document.getElementById("roster-drawer-backdrop");
+  const drawerClose = document.getElementById("roster-drawer-close");
+  const drawerPanel = drawer && drawer.querySelector(".roster-drawer__panel");
+  let lastFocusBeforeDrawer = null;
+
+  if (drawer && drawerBackdrop && drawerClose) {
+    const closeDrawer = () => {
+      drawer.setAttribute("hidden", "");
+      // Restore focus to whatever element opened the drawer so the
+      // operator's keyboard nav lands back on the table row instead
+      // of the body element.
+      if (lastFocusBeforeDrawer && typeof lastFocusBeforeDrawer.focus === "function") {
+        try { lastFocusBeforeDrawer.focus(); } catch (_) {}
+      }
+    };
+    drawerBackdrop.addEventListener("click", closeDrawer);
+    drawerClose.addEventListener("click", closeDrawer);
+    document.addEventListener("keydown", (e) => {
+      if (drawer.hasAttribute("hidden")) return;
+      if (e.key === "Escape") {
+        closeDrawer();
+        return;
+      }
+      // Focus trap. aria-modal=true promises the AT a modal experience;
+      // we have to actually deliver one by cycling Tab inside the drawer.
+      if (e.key === "Tab" && drawerPanel) {
+        const focusables = drawerPanel.querySelectorAll(
+          'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+  }
+  // Exposed on rosterState so openRosterDrawer can stash + restore focus.
+  rosterState._setLastFocus = (el) => { lastFocusBeforeDrawer = el; };
+
+  loadRoster();
+}
+
+async function loadRoster() {
+  rosterState.loading = true;
+  rosterState.error = null;
+  renderRosterTable();
+  try {
+    // Limit 200 (server max) so we can run all filters client-side at
+    // pilot scale. When the roster crosses 200 we'll wire server-side
+    // search; for now this stays simple.
+    const data = await window.ProudMeAdmin.fetchAdmin("/admin/users?limit=200");
+    rosterState.allRows = data.users || [];
+    rosterState.loading = false;
+    rebuildSelects();
+    renderRosterTable();
+  } catch (err) {
+    rosterState.loading = false;
+    rosterState.error = err.message || "Roster fetch failed.";
+    renderRosterTable();
+  }
+}
+
+function rebuildSelects() {
+  const schoolSelect = document.getElementById("roster-school");
+  const gradeSelect = document.getElementById("roster-grade");
+  if (!schoolSelect || !gradeSelect) return;
+  const schools = Array.from(new Set(rosterState.allRows.map((r) => r.schoolName).filter(Boolean))).sort();
+  const grades = Array.from(new Set(rosterState.allRows.map((r) => r.gradeLevel).filter(Boolean))).sort();
+  const fill = (sel, items, label, current) => {
+    sel.replaceChildren();
+    sel.appendChild(el("option", { value: "" }, [`All ${label}`]));
+    for (const it of items) {
+      const opt = el("option", { value: it }, [it]);
+      if (it === current) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  };
+  fill(schoolSelect, schools, "schools", rosterState.schoolFilter);
+  fill(gradeSelect, grades, "grades", rosterState.gradeFilter);
+}
+
+function filteredRows() {
+  return rosterState.allRows.filter((r) => {
+    if (rosterState.schoolFilter && r.schoolName !== rosterState.schoolFilter) return false;
+    if (rosterState.gradeFilter && r.gradeLevel !== rosterState.gradeFilter) return false;
+    if (rosterState.search) {
+      const hay = `${r.firstName} ${r.lastName} ${r.email}`.toLowerCase();
+      if (!hay.includes(rosterState.search)) return false;
+    }
+    return true;
+  });
+}
+
+function renderRosterTable() {
+  const wrap = document.getElementById("roster-table-wrap");
+  const countChip = document.getElementById("roster-count");
+  if (!wrap) return;
+  wrap.replaceChildren();
+
+  if (rosterState.loading) {
+    wrap.appendChild(el("p", { class: "audit-empty" }, ["Loading…"]));
+    if (countChip) countChip.textContent = "";
+    return;
+  }
+  if (rosterState.error) {
+    wrap.appendChild(el("p", { class: "audit-empty" }, ["Error: " + rosterState.error]));
+    if (countChip) countChip.textContent = "";
+    return;
+  }
+
+  const rows = filteredRows();
+  if (countChip) {
+    const total = rosterState.allRows.length;
+    countChip.textContent = rows.length === total
+      ? `${total} registered`
+      : `${rows.length} of ${total}`;
+  }
+  if (rows.length === 0) {
+    wrap.appendChild(el("p", { class: "audit-empty" }, ["No students match these filters."]));
+    return;
+  }
+
+  const nowMs = Date.now();
+
+  if (rosterState.groupBy === "school") {
+    const groups = new Map();
+    for (const r of rows) {
+      const key = r.schoolName || "(no school)";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+    const sortedKeys = Array.from(groups.keys()).sort();
+    for (const k of sortedKeys) {
+      wrap.appendChild(el("h3", { class: "roster-group-head" }, [
+        k, " ",
+        el("span", { class: "muted" }, [`(${groups.get(k).length})`]),
+      ]));
+      wrap.appendChild(buildRosterTable(groups.get(k), nowMs));
+    }
+  } else {
+    wrap.appendChild(buildRosterTable(rows, nowMs));
+  }
+}
+
+function buildRosterTable(rows, nowMs) {
+  const table = el("table", { class: "audit-table roster-table" });
+  table.appendChild(el("thead", null, [
+    el("tr", null, [
+      el("th", null, ["Name"]),
+      el("th", null, ["School"]),
+      el("th", null, ["Grade"]),
+      el("th", null, ["Joined"]),
+      el("th", null, ["Last active"]),
+      el("th", null, ["Today"]),
+    ]),
+  ]));
+  const tbody = el("tbody");
+  for (const r of rows) {
+    const cls = classifyStudent(r, nowMs);
+    const tr = el("tr", {
+      class: "audit-row roster-row",
+      tabindex: "0",
+      role: "button",
+      "aria-label": `Open details for ${r.firstName} ${r.lastName}`,
+    });
+    tr.appendChild(el("td", null, [
+      el("span", { class: "status-dot status-dot--" + cls.kind, title: cls.label }),
+      ` ${r.firstName} ${r.lastName}`,
+    ]));
+    tr.appendChild(el("td", null, [r.schoolName || "—"]));
+    tr.appendChild(el("td", null, [r.gradeLevel || "—"]));
+    tr.appendChild(el("td", null, [fmtCreatedAt(r.createdAt)]));
+    tr.appendChild(el("td", null, [fmtRelative(r.lastLoginAt, nowMs)]));
+    tr.appendChild(el("td", null, [r.todaySubmittedBehavior ? "✓" : "—"]));
+    const open = () => openRosterDrawer(r);
+    tr.addEventListener("click", open);
+    tr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
+function openRosterDrawer(row) {
+  const drawer = document.getElementById("roster-drawer");
+  const body = document.getElementById("roster-drawer-body");
+  const titleEl = document.getElementById("roster-drawer-title");
+  const closeBtn = document.getElementById("roster-drawer-close");
+  if (!drawer || !body) return;
+  if (titleEl) titleEl.textContent = `${row.firstName} ${row.lastName}`;
+  // Stash the currently-focused element so closeDrawer can restore it.
+  if (rosterState._setLastFocus) {
+    rosterState._setLastFocus(document.activeElement);
+  }
+  body.replaceChildren();
+
+  const nowMs = Date.now();
+  const cls = classifyStudent(row, nowMs);
+
+  // Status header.
+  body.appendChild(el("div", { class: "drawer-status" }, [
+    el("span", { class: "status-dot status-dot--" + cls.kind }),
+    el("span", null, [cls.label]),
+  ]));
+
+  // Email row with Reveal gate.
+  const emailRow = el("div", { class: "drawer-row" }, [
+    el("span", { class: "drawer-row__label" }, ["Email"]),
+    el("span", { class: "drawer-row__value drawer-row__value--gated" }, [
+      "·".repeat(8) + "@" + "·".repeat(8),
+    ]),
+  ]);
+  const valueEl = emailRow.querySelector(".drawer-row__value");
+  const revealBtn = el("button", {
+    class: "btn btn--ghost btn--small drawer-reveal",
+    type: "button",
+    onClick: () => {
+      valueEl.textContent = row.email || "—";
+      valueEl.classList.remove("drawer-row__value--gated");
+      revealBtn.remove();
+    },
+  }, ["Reveal"]);
+  emailRow.appendChild(revealBtn);
+  body.appendChild(emailRow);
+
+  const dl = el("dl", { class: "drawer-dl" });
+  const fields = [
+    ["School", row.schoolName],
+    ["Grade", row.gradeLevel],
+    ["Birth month", row.birthMonth],
+    ["Birth year", row.birthYear],
+    ["Gender", row.gender],
+    ["Height (cm)", row.heightCm == null ? "—" : String(row.heightCm)],
+    ["Weight (kg)", row.weightKg == null ? "—" : String(row.weightKg)],
+    ["Email verified", row.isVerifiedEmail ? "yes" : "no"],
+    ["Parental consent", row.parentalConsentGiven ? "yes" : "no"],
+    ["Consent recorded", row.parentalConsentAt ? fmtTs(row.parentalConsentAt) : "—"],
+    ["Joined (CT)", fmtCreatedAt(row.createdAt)],
+    ["Last active", fmtRelative(row.lastLoginAt, nowMs)],
+    ["Today's behavior log", row.todaySubmittedBehavior ? "submitted" : "not submitted"],
+    ["User ID", row._id],
+  ];
+  for (const [k, v] of fields) {
+    dl.appendChild(el("dt", null, [k]));
+    dl.appendChild(el("dd", null, [v == null || v === "" ? "—" : String(v)]));
+  }
+  body.appendChild(dl);
+
+  // Phase 6: per-student timeline section.
+  body.appendChild(el("hr", { class: "drawer-rule" }));
+  body.appendChild(el("h3", { class: "drawer-section-title" }, ["Timeline"]));
+
+  const timelineState = {
+    kinds: { behavior: true, chat: true, safety: true },
+  };
+  const timelineFilters = el("div", { class: "chips drawer-timeline-filters" });
+  for (const k of ["behavior", "chat", "safety"]) {
+    const chip = el("button", {
+      class: "chip chip--active",
+      type: "button",
+      dataset: { kind: k },
+      onClick: () => {
+        timelineState.kinds[k] = !timelineState.kinds[k];
+        chip.classList.toggle("chip--active");
+        renderTimeline();
+      },
+    }, [k.charAt(0).toUpperCase() + k.slice(1)]);
+    timelineFilters.appendChild(chip);
+  }
+  body.appendChild(timelineFilters);
+
+  const timelineList = el("ol", { class: "timeline-list" });
+  body.appendChild(timelineList);
+
+  // Round 18.1 reviewer fix: a truncation hint footer the timeline
+  // fetch will fill in if the backend reports truncated:true. Without
+  // this hint a heavy user with >500 events sees a hard cutoff and no
+  // affordance that older data exists. The footer stays hidden until
+  // we know.
+  const timelineHint = el("div", { class: "timeline-hint", hidden: "" }, [""]);
+  body.appendChild(timelineHint);
+
+  let allEvents = [];
+  const renderTimeline = () => {
+    timelineList.replaceChildren();
+    const filtered = allEvents.filter((ev) => timelineState.kinds[ev.kind]);
+    if (filtered.length === 0) {
+      timelineList.appendChild(el("li", { class: "timeline-empty" }, [
+        allEvents.length === 0 ? "No timeline events for this student yet." : "No events match the selected kinds.",
+      ]));
+      return;
+    }
+    const nowMs = Date.now();
+    for (const ev of filtered) {
+      const li = el("li", { class: "timeline-event timeline-event--" + ev.kind });
+      li.appendChild(el("span", { class: "timeline-event__badge timeline-event__badge--" + ev.kind }, [ev.kind]));
+      li.appendChild(el("div", { class: "timeline-event__body" }, [
+        el("div", { class: "timeline-event__when" }, [fmtTs(ev.timestamp), " · ", fmtRelative(ev.timestamp, nowMs)]),
+        el("div", { class: "timeline-event__summary" }, [summarizeTimelineEvent(ev)]),
+      ]));
+      timelineList.appendChild(li);
+    }
+  };
+
+  // Load on open.
+  timelineList.appendChild(el("li", { class: "timeline-empty" }, ["Loading timeline…"]));
+  window.ProudMeAdmin.fetchAdmin("/admin/users/" + row._id + "/timeline")
+    .then((data) => {
+      allEvents = (data && data.events) || [];
+      // Round 18.1 reviewer fix: surface the backend's truncated flag
+      // (Phase 6 cap is 500 events). Without this the operator gets
+      // no signal that older data exists for a chatty user.
+      if (data && data.truncated) {
+        timelineHint.replaceChildren(
+          document.createTextNode(
+            "Showing the most recent " + (data.cap || allEvents.length) +
+            " events. Older history exists but is not shown."
+          )
+        );
+        timelineHint.removeAttribute("hidden");
+      } else {
+        timelineHint.setAttribute("hidden", "");
+      }
+      renderTimeline();
+    })
+    .catch((err) => {
+      timelineList.replaceChildren();
+      timelineList.appendChild(el("li", { class: "timeline-empty timeline-empty--err" }, [
+        "Timeline fetch failed: " + (err.message || "unknown"),
+      ]));
+    });
+
+  drawer.removeAttribute("hidden");
+  // Move focus into the drawer so screen reader users land in the
+  // modal context (close button is the most predictable target).
+  if (closeBtn && typeof closeBtn.focus === "function") {
+    try { closeBtn.focus(); } catch (_) {}
+  }
+}
+
+function summarizeTimelineEvent(ev) {
+  const d = ev.data || {};
+  if (ev.kind === "behavior") {
+    const status = d.goalStatus ? ` · ${d.goalStatus}` : "";
+    return `${d.goalType || "?"}: logged ${d.behaviorValue ?? "—"} of ${d.goalValue ?? "—"}${status}`;
+  }
+  if (ev.kind === "chat") {
+    return `Chat session "${d.title || "(untitled)"}" · ${d.messageCount || 0} message${d.messageCount === 1 ? "" : "s"}`;
+  }
+  if (ev.kind === "safety") {
+    const cats = (d.categories || []).join(", ");
+    return `${d.action} (${d.source}/${d.endpoint})${cats ? " · " + cats : ""}`;
+  }
+  return JSON.stringify(d);
+}
+
+// ---------- Boot ----------------------------------------------------------
+
+window.ProudMeAdminPanels = {
+  mountAll: function (initialStatusData) {
+    if (initialStatusData) {
+      renderStatus(initialStatusData);
+    } else {
+      pollStatus();
+    }
+    startStatusPolling();
+    mountAnalytics();
+    createAuditPanel(SAFETY_PANEL);
+    createAuditPanel(DISPATCH_PANEL);
+    createAuditPanel(CONTACT_PANEL);
+    mountRosterPanel();
+  },
+  // Round 18.1 reviewer fix: surface stopStatusPolling so app.js
+  // logout() can shut the interval down before clearing the JWT.
+  stopAll: function () {
+    stopStatusPolling();
+  },
+};

@@ -10,15 +10,16 @@
   <meta property="og:title" content="ProudMe · Big habits start small.">
   <meta property="og:description" content="A wellness app for kids 7-12 that makes healthy habits feel like a game. Built by the LSU Pedagogical Kinesiology Lab.">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://proudme.org/assets/og-card.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ProudMe · Big habits start small.">
   <meta name="twitter:description" content="A wellness app for kids 7-12 that makes healthy habits feel like a game. Built by the LSU Pedagogical Kinesiology Lab.">
-
-  <!-- TODO: once the public hosting URL is set, restore the og:image, twitter:image, and canonical link with that URL. -->
+  <meta name="twitter:image" content="https://proudme.org/assets/og-card.png">
 
   <meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://proudme.org/">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -359,9 +360,16 @@
             <li><strong>PI:</strong> Dr. Senlin Chen, PhD</li>
           </ul>
         </div>
-        <form class="contact__form" id="contact-form" action="https://formspree.io/f/mvzyoqdo" method="POST">
-          <input type="hidden" name="_subject" value="ProudMe contact form submission">
-          <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
+        <!--
+          Phase 2B (2026-05-19): form posts as JSON to /contact/public via
+          script.js. The action attribute is left empty so that if a user
+          has JS disabled, the form simply does nothing (no Formspree URL
+          to fall back to, no surface that would persist messages without
+          going through our rate limit + email path). Hidden honeypot
+          field kept under a non-Formspree name; backend ignores it.
+        -->
+        <form class="contact__form" id="contact-form" action="" method="POST">
+          <input type="text" name="_honeypot" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
           <label class="contact__field">
             <span>Your name</span>
             <input type="text" name="name" required autocomplete="name">

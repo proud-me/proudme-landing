@@ -38,17 +38,19 @@
   });
 })();
 
-// Contact form: POST to Formspree, show inline success/error.
-// While the form action still contains the {FORMSPREE_FORM_ID} placeholder
-// (i.e. before Formspree has been set up on proudmeresearch@gmail.com),
-// fall back to a mailto link so the form is never broken in production.
+// Contact form: POST as JSON to the ProudMe backend at /contact/public,
+// show inline success/error. Replaced the prior Formspree integration
+// in Phase 2B (2026-05-19); the backend now both persists the message
+// to ContactMessage and dispatches the SendGrid email to the lab inbox.
+// Rate-limited at 3/hour/IP server-side; spam guards are server-side too.
 (function () {
   'use strict';
   var form = document.getElementById('contact-form');
   if (!form) return;
   var status = document.getElementById('contact-status');
   var submitBtn = form.querySelector('.contact__submit');
-  var FALLBACK_EMAIL = 'proudmeresearch@gmail.com';
+  var BACKEND_URL = 'https://proudme-backend.onrender.com';
+  var FALLBACK_EMAIL = 'pklab@lsu.edu';
 
   function setStatus(kind, text) {
     if (!status) return;
@@ -57,47 +59,60 @@
   }
 
   form.addEventListener('submit', function (e) {
-    var action = form.getAttribute('action') || '';
-    var formspreeReady = action.indexOf('{FORMSPREE_FORM_ID}') === -1;
+    e.preventDefault();
+    var data = new FormData(form);
+    var honeypot = String(data.get('_honeypot') || '').trim();
+    // Silent-accept on honeypot fill. Bots filling hidden fields get the
+    // success state so the operator doesn't waste eyeballs on filtered
+    // submissions, and the bot doesn't learn the field is a trap.
+    if (honeypot) {
+      form.reset();
+      setStatus('success', "Thanks! We'll reply within a few days.");
+      return;
+    }
+    var name = String(data.get('name') || '').trim();
+    var email = String(data.get('email') || '').trim();
+    var subject = String(data.get('subject') || '').trim();
+    var topic = String(data.get('topic') || 'general').trim();
+    var message = String(data.get('message') || '').trim();
 
-    if (!formspreeReady) {
-      // Fallback: open user's mail client until Formspree is wired up.
-      e.preventDefault();
-      var data = new FormData(form);
-      var name = String(data.get('name') || '').trim();
-      var email = String(data.get('email') || '').trim();
-      var message = String(data.get('message') || '').trim();
-      if (!name || !email || !message) {
-        setStatus('error', 'Please fill in name, email, and message.');
-        return;
-      }
-      var subject = encodeURIComponent('Contact from ' + name);
-      var body = encodeURIComponent(message + '\n\nFrom: ' + name + ' (' + email + ')');
-      window.location.href = 'mailto:' + FALLBACK_EMAIL + '?subject=' + subject + '&body=' + body;
+    if (!name || !email || !message) {
+      setStatus('error', 'Please fill in name, email, and message.');
+      return;
+    }
+    if (message.length < 10) {
+      setStatus('error', 'Message must be at least 10 characters.');
       return;
     }
 
-    // Formspree mode: fetch POST, stay on page, show inline result.
-    e.preventDefault();
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending...'; }
     setStatus('sending', 'Sending your message.');
 
-    fetch(action, {
+    fetch(BACKEND_URL + '/contact/public', {
       method: 'POST',
-      body: new FormData(form),
-      headers: { Accept: 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ name: name, email: email, topic: topic, subject: subject, message: message }),
+      credentials: 'omit',
+      mode: 'cors'
     }).then(function (res) {
+      if (res.status === 429) {
+        setStatus('error', 'Too many submissions from this network. Try again in an hour.');
+        return;
+      }
       if (res.ok) {
         form.reset();
         setStatus('success', "Thanks! We'll reply within a few days.");
-      } else {
-        return res.json().then(function (json) {
-          var errors = (json && json.errors) ? json.errors.map(function (e) { return e.message; }).join(', ') : '';
-          setStatus('error', errors || ('Something went wrong. Email us at ' + FALLBACK_EMAIL + ' directly.'));
-        }).catch(function () {
-          setStatus('error', 'Something went wrong. Email us at ' + FALLBACK_EMAIL + ' directly.');
-        });
+        return;
       }
+      return res.json().then(function (json) {
+        var msg = (json && json.message) ? String(json.message) : '';
+        setStatus('error', msg || ('Something went wrong. Email us at ' + FALLBACK_EMAIL + ' directly.'));
+      }).catch(function () {
+        setStatus('error', 'Something went wrong. Email us at ' + FALLBACK_EMAIL + ' directly.');
+      });
     }).catch(function () {
       setStatus('error', 'Network error. Email us at ' + FALLBACK_EMAIL + ' directly.');
     }).then(function () {
