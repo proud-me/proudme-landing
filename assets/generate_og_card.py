@@ -108,7 +108,7 @@ def main():
 
     # Subtitle / pitch.
     d.text((pad_l, pad_t + 240),
-           "A kids 7-12 wellness app from\nthe LSU Pedagogical Kinesiology Lab.",
+           "A kids 7-11 wellness app from\nthe LSU Pedagogical Kinesiology Lab.",
            font=tag_font, fill=CREAM_DIM, spacing=8)
 
     # Badge pill (gold capsule with dark text), bottom-left.
