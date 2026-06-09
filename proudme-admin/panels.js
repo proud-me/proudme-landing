@@ -1627,6 +1627,303 @@ function summarizeTimelineEvent(ev) {
   return JSON.stringify(d);
 }
 
+// ---------- EMA survey enrollment + compliance (R47) ----------------------
+
+function emaPct(n) {
+  return n == null ? "—" : n + "%";
+}
+
+// One search-result row with Enroll / Unenroll actions.
+function emaEnrollRow(user) {
+  const status = el("span", { class: "muted ema-row__status" }, [""]);
+  const doEnroll = async (enrolled) => {
+    status.textContent = "Saving…";
+    try {
+      const r = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enroll", {
+        method: "POST",
+        body: { userId: user._id, enrolled },
+      });
+      status.textContent = r && r.emaEnrolled ? "✓ Enrolled" : "Not enrolled";
+    } catch (err) {
+      status.textContent = "Error: " + (err.message || "failed");
+    }
+  };
+  const name =
+    user.name ||
+    [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+    "(no name)";
+  return el("div", { class: "ema-row" }, [
+    el("div", { class: "ema-row__main" }, [
+      el("strong", null, [name]),
+      el("span", { class: "muted" }, [" · " + (user.email || "—")]),
+      user.gradeLevel ? el("span", { class: "muted" }, [" · grade " + user.gradeLevel]) : null,
+    ]),
+    el("div", { class: "ema-row__actions" }, [
+      el("button", { class: "btn btn--primary btn--small", type: "button", onClick: () => doEnroll(true) }, ["Enroll"]),
+      el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: () => doEnroll(false) }, ["Unenroll"]),
+      status,
+    ]),
+  ]);
+}
+
+function mountEmaEnrollPanel() {
+  const root = document.getElementById("ema-enroll-panel");
+  if (!root) return;
+  root.classList.add("panel");
+  root.replaceChildren();
+
+  root.appendChild(el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, ["Survey Enrollment"]),
+      el("span", { class: "panel__hint" }, ["Only enrolled participants receive prompts"]),
+    ]),
+  ]));
+  root.appendChild(el("div", { class: "dash-banner" }, [
+    el("strong", null, ["Enroll the camp roster here. "]),
+    "Creating an app account does NOT enroll a child in the survey. Search to add one at a time, or paste a roster below.",
+  ]));
+
+  // Single search + enroll.
+  const searchInput = el("input", { type: "search", class: "filter-input", placeholder: "Search name or email", autocomplete: "off" });
+  const results = el("div", { class: "ema-results" }, [el("p", { class: "muted" }, ["Type a name or email, then Search."])]);
+  const runSearch = async () => {
+    const q = String(searchInput.value || "").trim();
+    if (!q) { results.replaceChildren(el("p", { class: "muted" }, ["Type a name or email, then Search."])); return; }
+    results.replaceChildren(el("p", { class: "muted" }, ["Searching…"]));
+    try {
+      const data = await window.ProudMeAdmin.fetchAdmin("/admin/users?q=" + encodeURIComponent(q) + "&limit=25");
+      const users = (data && data.users) || [];
+      if (users.length === 0) { results.replaceChildren(el("p", { class: "muted" }, ["No matching accounts."])); return; }
+      results.replaceChildren.apply(results, users.map(emaEnrollRow));
+    } catch (err) {
+      results.replaceChildren(el("p", { class: "muted" }, ["Search failed: " + (err.message || "unknown")]));
+    }
+  };
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } });
+  root.appendChild(el("div", { class: "ema-search-row" }, [
+    searchInput,
+    el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: runSearch }, ["Search"]),
+  ]));
+  root.appendChild(results);
+
+  // Bulk enroll.
+  const bulkArea = el("textarea", { class: "filter-input ema-bulk", rows: "4", placeholder: "Paste emails (one per line or comma-separated)" });
+  const bulkOut = el("div", { class: "ema-bulk-out muted" });
+  const runBulk = async (enrolled) => {
+    const emails = String(bulkArea.value || "").split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+    if (emails.length === 0) { bulkOut.replaceChildren(document.createTextNode("Paste at least one email.")); return; }
+    bulkOut.replaceChildren(document.createTextNode("Submitting " + emails.length + " email(s)…"));
+    try {
+      const r = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enroll-bulk", { method: "POST", body: { emails, enrolled } });
+      const bad = (r.results || []).filter((x) => !x.ok);
+      bulkOut.replaceChildren(
+        el("div", null, [(enrolled ? "Enrolled " : "Unenrolled ") + (r.updated || 0) + " of " + r.requested + "."]),
+        bad.length ? el("div", { class: "muted" }, ["Not matched: " + bad.map((x) => x.email).join(", ")]) : null,
+      );
+    } catch (err) {
+      bulkOut.replaceChildren(document.createTextNode("Bulk failed: " + (err.message || "unknown")));
+    }
+  };
+  root.appendChild(el("div", { class: "ema-bulk-block" }, [
+    el("h3", { class: "chart-card__title" }, ["Bulk enroll a roster"]),
+    bulkArea,
+    el("div", { class: "ema-bulk-actions" }, [
+      el("button", { class: "btn btn--primary btn--small", type: "button", onClick: () => runBulk(true) }, ["Enroll all"]),
+      el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: () => runBulk(false) }, ["Unenroll all"]),
+    ]),
+    bulkOut,
+  ]));
+}
+
+// Per-participant prompt log (expanded inline from the compliance roster).
+function emaUserDetail(u) {
+  const wrap = el("div", { class: "ema-user-detail" });
+  if (!u || !u.scheduleGenerated) {
+    wrap.appendChild(el("p", { class: "muted" }, ["No schedule generated yet (the participant has not opened the app during a study window)."]));
+    return wrap;
+  }
+  const t = el("table", { class: "audit-table" });
+  t.appendChild(el("thead", null, [el("tr", null, [
+    el("th", null, ["Period"]), el("th", null, ["Day"]), el("th", null, ["Block"]),
+    el("th", null, ["Scheduled"]), el("th", null, ["Responded"]), el("th", null, ["On time"]),
+  ])]));
+  const tb = el("tbody");
+  (u.prompts || []).forEach((p) => {
+    tb.appendChild(el("tr", null, [
+      el("td", null, ["P" + (p.period + 1)]),
+      el("td", null, [String(p.dayNum)]),
+      el("td", null, [String(p.blockNum)]),
+      el("td", null, [fmtTs(p.scheduledAt)]),
+      el("td", null, [p.respondedAt ? fmtTs(p.respondedAt) : "—"]),
+      el("td", null, [p.respondedAt ? (p.withinWindow ? "Yes" : "Late") : "—"]),
+    ]));
+  });
+  t.appendChild(tb);
+  wrap.appendChild(t);
+  return wrap;
+}
+
+function mountEmaCompliancePanel() {
+  const root = document.getElementById("ema-compliance-panel");
+  if (!root) return;
+  root.classList.add("panel");
+  root.replaceChildren();
+
+  const statGrid = el("div", { class: "status-grid" });
+  const blockWrap = el("div", { class: "table-wrap" });
+  const rosterWrap = el("div", { class: "table-wrap" });
+  const refreshBtn = el("button", { class: "btn btn--ghost btn--small", type: "button", title: "Manual refresh" }, ["Refresh"]);
+
+  root.appendChild(el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, ["Survey Compliance"]),
+      el("span", { class: "panel__hint" }, ["Rates are vs prompts already due"]),
+    ]),
+    el("div", { class: "panel__actions" }, [refreshBtn]),
+  ]));
+  root.appendChild(statGrid);
+  root.appendChild(el("h3", { class: "chart-card__title" }, ["By block"]));
+  root.appendChild(blockWrap);
+  root.appendChild(el("h3", { class: "chart-card__title" }, ["Enrolled participants"]));
+  root.appendChild(rosterWrap);
+
+  const load = async () => {
+    statGrid.replaceChildren(el("div", { class: "status-tile status-tile--placeholder" }, ["Loading…"]));
+    blockWrap.replaceChildren();
+    rosterWrap.replaceChildren();
+    try {
+      const c = await window.ProudMeAdmin.fetchAdmin("/admin/ema/compliance");
+      const o = c.overall || {};
+      statGrid.replaceChildren(
+        statusTile("Enrolled", c.enrolledUsers == null ? "—" : String(c.enrolledUsers), ""),
+        statusTile("Prompts due", o.due == null ? "—" : String(o.due), ""),
+        statusTile("Responded", o.responded == null ? "—" : String(o.responded), ""),
+        statusTile("Response rate", emaPct(o.responseRate), o.responseRate != null && o.responseRate < 50 ? "warn" : "ok"),
+        statusTile("On-time rate", emaPct(o.onTimeRate), ""),
+      );
+      const bt = el("table", { class: "audit-table" });
+      bt.appendChild(el("thead", null, [el("tr", null, [
+        el("th", null, ["Period"]), el("th", null, ["Block"]), el("th", null, ["Due"]), el("th", null, ["Responded"]), el("th", null, ["Rate"]),
+      ])]));
+      const bb = el("tbody");
+      (c.byBlock || []).forEach((b) => {
+        bb.appendChild(el("tr", null, [
+          el("td", null, ["Period " + (b.period + 1)]),
+          el("td", null, ["Block " + b.blockNum]),
+          el("td", null, [String(b.due)]),
+          el("td", null, [String(b.responded)]),
+          el("td", null, [emaPct(b.responseRate)]),
+        ]));
+      });
+      if (!(c.byBlock || []).length) {
+        bb.appendChild(el("tr", null, [el("td", { colspan: "5", class: "muted" }, ["No prompts have come due yet."])]));
+      }
+      bt.appendChild(bb);
+      blockWrap.replaceChildren(bt);
+    } catch (err) {
+      statGrid.replaceChildren(el("div", { class: "status-tile status-tile--err" }, ["✗ " + (err.message || "failed")]));
+    }
+    try {
+      const data = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enrolled");
+      const rows = (data && data.enrolled) || [];
+      const t = el("table", { class: "audit-table" });
+      t.appendChild(el("thead", null, [el("tr", null, [
+        el("th", null, ["Name"]), el("th", null, ["Email"]), el("th", null, ["Grade"]),
+        el("th", null, ["Resp/Due"]), el("th", null, ["Rate"]), el("th", null, [""]),
+      ])]));
+      const tb = el("tbody");
+      if (rows.length === 0) {
+        tb.appendChild(el("tr", null, [el("td", { colspan: "6", class: "muted" }, ["No participants enrolled yet."])]));
+      }
+      rows.forEach((r) => {
+        const detail = el("tr", { class: "audit-detail", hidden: "" }, [el("td", { colspan: "6" }, ["Loading…"])]);
+        const detailCell = detail.firstChild;
+        let loaded = false;
+        const viewBtn = el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: async () => {
+          if (detail.hasAttribute("hidden")) {
+            detail.removeAttribute("hidden");
+            if (!loaded) {
+              loaded = true;
+              try {
+                const u = await window.ProudMeAdmin.fetchAdmin("/admin/ema/" + r.userId);
+                detailCell.replaceChildren(emaUserDetail(u));
+              } catch (err) {
+                detailCell.replaceChildren(el("span", { class: "muted" }, ["Failed: " + (err.message || "")]));
+              }
+            }
+          } else {
+            detail.setAttribute("hidden", "");
+          }
+        } }, ["View"]);
+        tb.appendChild(el("tr", null, [
+          el("td", null, [r.name || "(no name)"]),
+          el("td", null, [r.email || "—"]),
+          el("td", null, [r.gradeLevel || "—"]),
+          el("td", null, [r.responded + "/" + r.due]),
+          el("td", null, [emaPct(r.responseRate)]),
+          el("td", null, [viewBtn]),
+        ]));
+        tb.appendChild(detail);
+      });
+      t.appendChild(tb);
+      rosterWrap.replaceChildren(t);
+    } catch (err) {
+      rosterWrap.replaceChildren(el("p", { class: "muted" }, ["Enrolled list failed: " + (err.message || "unknown")]));
+    }
+  };
+  refreshBtn.addEventListener("click", load);
+  load();
+}
+
+// ---------- New-signups growth (R47) --------------------------------------
+
+function mountSignupsPanel() {
+  const root = document.getElementById("signups-panel");
+  if (!root) return;
+  root.classList.add("panel");
+  root.replaceChildren();
+  const body = el("div", { class: "signups-body" }, [el("p", { class: "muted" }, ["Loading…"])]);
+  const refreshBtn = el("button", { class: "btn btn--ghost btn--small", type: "button" }, ["Refresh"]);
+  root.appendChild(el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, ["New Signups"]),
+      el("span", { class: "panel__hint" }, ["Accounts created per day (last 30)"]),
+    ]),
+    el("div", { class: "panel__actions" }, [refreshBtn]),
+  ]));
+  root.appendChild(body);
+  const load = async () => {
+    body.replaceChildren(el("p", { class: "muted" }, ["Loading…"]));
+    try {
+      const data = await window.ProudMeAdmin.fetchAdmin("/admin/analytics/signups?days=30");
+      const daily = (data && data.daily) || [];
+      const max = daily.reduce((m, d) => Math.max(m, d.count), 0) || 1;
+      const grid = el("div", { class: "status-grid" }, [
+        statusTile("Total (30d)", String(data.totalInWindow || 0), ""),
+        statusTile("Days with signups", String(daily.length), ""),
+      ]);
+      const bars = el("div", { class: "signups-bars" });
+      if (daily.length === 0) {
+        bars.appendChild(el("p", { class: "muted" }, ["No signups in the last 30 days."]));
+      }
+      daily.forEach((d) => {
+        bars.appendChild(el("div", { class: "signups-bar-row" }, [
+          el("span", { class: "signups-bar-row__date muted" }, [d.date]),
+          el("span", { class: "signups-bar-row__track" }, [
+            el("span", { class: "signups-bar-row__fill", style: "width:" + Math.round((d.count / max) * 100) + "%" }, []),
+          ]),
+          el("span", { class: "signups-bar-row__count" }, [String(d.count)]),
+        ]));
+      });
+      body.replaceChildren(grid, bars);
+    } catch (err) {
+      body.replaceChildren(el("p", { class: "muted" }, ["Signups failed: " + (err.message || "unknown")]));
+    }
+  };
+  refreshBtn.addEventListener("click", load);
+  load();
+}
+
 // ---------- Boot ----------------------------------------------------------
 
 window.ProudMeAdminPanels = {
@@ -1642,6 +1939,9 @@ window.ProudMeAdminPanels = {
     createAuditPanel(DISPATCH_PANEL);
     createAuditPanel(CONTACT_PANEL);
     mountRosterPanel();
+    mountEmaEnrollPanel();
+    mountEmaCompliancePanel();
+    mountSignupsPanel();
   },
   // Round 18.1 reviewer fix: surface stopStatusPolling so app.js
   // logout() can shut the interval down before clearing the JWT.

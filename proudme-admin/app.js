@@ -10,8 +10,10 @@ if (window.top !== window.self) {
 // ProudMe Admin Dashboard, vanilla JS, no build step.
 // Phase 1: auth state machine + idle timer + fetchAdmin helper.
 //
-// Backend URL: edit this constant if Render service moves.
-// All admin endpoints are CORS-gated by WEB_ORIGIN env var on Render.
+// R47: the dashboard is now served BY the backend (Express, /admin/*), so it
+// is same-origin. Use the page origin instead of a hard-coded Render URL, so
+// the console works on any deploy (and no longer depends on a WEB_ORIGIN CORS
+// allowlist, since same-origin requests are not cross-origin).
 const BACKEND_URL = "https://proudme-backend.onrender.com";
 
 // 30 minutes of no user interaction triggers auto-logout.

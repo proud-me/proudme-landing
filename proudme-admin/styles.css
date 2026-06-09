@@ -1189,3 +1189,100 @@ code {
     margin-top: 8px;
   }
 }
+
+/* R47: EMA enrollment + compliance panels. Flex layouts wrap on narrow
+   screens so the panels stay usable on a phone without extra media queries. */
+.ema-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ema-search-row .filter-input {
+  flex: 1 1 240px;
+}
+.ema-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.ema-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.ema-row__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ema-row__status {
+  font-size: 12px;
+}
+.ema-bulk-block {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ema-bulk {
+  width: 100%;
+  min-height: 84px;
+  margin: 8px 0;
+  font-family: inherit;
+  resize: vertical;
+}
+.ema-bulk-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.ema-bulk-out {
+  font-size: 13px;
+}
+.ema-user-detail {
+  font-size: 13px;
+}
+
+/* R47: new-signups horizontal bars. */
+.signups-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+.signups-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.signups-bar-row__date {
+  flex: 0 0 84px;
+}
+.signups-bar-row__track {
+  flex: 1 1 auto;
+  height: 12px;
+  background: var(--bone);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.signups-bar-row__fill {
+  display: block;
+  height: 100%;
+  background: #3c3293;
+  border-radius: 6px;
+}
+.signups-bar-row__count {
+  flex: 0 0 28px;
+  text-align: right;
+  font-weight: 700;
+}
