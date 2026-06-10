@@ -1321,3 +1321,59 @@ code {
 .adh-cell--none {
   color: var(--muted);
 }
+
+/* R50: jump-nav row inside the sticky topbar. Pure anchor links; pill
+   chips scroll horizontally on narrow screens instead of wrapping. */
+.dash-jumpnav {
+  border-top: 1px solid var(--line);
+}
+.dash-jumpnav__inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 6px clamp(16px, 3vw, 32px);
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.dash-jumpnav a {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+.dash-jumpnav a:hover {
+  background: var(--bone);
+  color: var(--brand-start);
+  text-decoration: none;
+}
+/* Anchored panels must clear the taller sticky header (topbar + nav row),
+   otherwise every jump hides the panel title under the bar. */
+.dash-main > section {
+  scroll-margin-top: 110px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* R50: EMA study-window chip in the compliance panel header. */
+.ema-window-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--brand-start);
+  background: rgba(60, 50, 147, 0.10);
+}
+.ema-window-chip--active {
+  color: #fff;
+  background: var(--brand-start);
+}

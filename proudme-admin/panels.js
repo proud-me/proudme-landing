@@ -1,7 +1,10 @@
 "use strict";
 
-// Phase 2 audit panels: AI safety events + counselor dispatches.
+// Phase 2 audit panels: AI safety events + contact submissions.
 // Each panel reuses the shared filter-chip + load-more pattern below.
+// R50: the counselor dispatch queue panel was removed from the frontend;
+// the backend dispatch engine and /admin/notification-dispatches endpoint
+// remain untouched.
 
 // ---------- CSV download helper (Phase 7) --------------------------------
 
@@ -45,8 +48,8 @@ async function downloadAdminCsv(endpoint, filters) {
 
 // Creates an element with optional attrs, dataset, and children. Never
 // accepts innerHTML from server data, only text nodes via the children
-// array. Reviewer-noted constraint: SafetyEvent and NotificationDispatch
-// rows include free-form fields (lastError, categories[], etc.) that
+// array. Reviewer-noted constraint: SafetyEvent and ContactMessage
+// rows include free-form fields (subject, body, categories[], etc.) that
 // must render as text, not HTML.
 function el(tag, attrs, children) {
   const node = document.createElement(tag);
@@ -506,52 +509,6 @@ const SAFETY_PANEL = {
   ],
 };
 
-const DISPATCH_PANEL = {
-  mountId: "dispatch-panel",
-  title: "Counselor Dispatch Queue",
-  endpoint: "/admin/notification-dispatches",
-  responseKey: "dispatches",
-  emptyLabel: "dispatches",
-  filters: [
-    {
-      key: "status",
-      label: "Status",
-      options: [
-        { value: "queued", label: "Queued" },
-        { value: "dispatched", label: "Dispatched" },
-        { value: "failed", label: "Failed" },
-        { value: "skipped_no_recipient", label: "No recipient" },
-      ],
-    },
-    {
-      key: "action",
-      label: "Action",
-      options: [
-        { value: "crisis_response", label: "Crisis" },
-        { value: "harmful_redirect", label: "Redirect" },
-        { value: "output_swapped", label: "Output swapped" },
-        { value: "moderation_degraded", label: "Mod degraded" },
-      ],
-    },
-  ],
-  columns: [
-    { key: "triggeredAt", label: "Triggered (CT)", render: (r) => fmtTs(r.triggeredAt) },
-    { key: "action", label: "Action", render: (r) => prettify(r.action) },
-    { key: "status", label: "Status", render: (r) => prettify(r.status) },
-    { key: "userId", label: "User", render: (r) => shortenId(r.userId) },
-    { key: "digestToken", label: "Event ID", render: (r) => r.digestToken || "—" },
-    { key: "dispatchedAt", label: "Dispatched (CT)", render: (r) => fmtTs(r.dispatchedAt) },
-  ],
-  detailFields: (r) => [
-    ["Full user ID", r.userId],
-    ["Session ID", r.sessionId],
-    ["Event ID (digestToken)", r.digestToken],
-    ["Triggered (ISO)", r.triggeredAt],
-    ["Dispatched (ISO)", r.dispatchedAt],
-    ["Last error", r.lastError],
-  ],
-};
-
 // Contact-specific helpers. Defense against mailto header injection
 // (Outlook desktop historically decodes %0A in `subject=` into a literal
 // newline that some clients then parse as a header continuation, e.g.
@@ -734,11 +691,9 @@ function renderStatus(data) {
     data.activeSafetyEvents24h == null ? "—" : String(data.activeSafetyEvents24h),
     data.activeSafetyEvents24h > 0 ? "warn" : ""
   ));
-  grid.appendChild(statusTile(
-    "Queued dispatches",
-    data.queuedDispatches == null ? "—" : String(data.queuedDispatches),
-    data.queuedDispatches > 0 ? "warn" : ""
-  ));
+  // R50: "Queued dispatches" tile removed with the dispatch panel; the
+  // status payload still returns queuedDispatches and it is intentionally
+  // ignored here.
   grid.appendChild(statusTile(
     "Unread contact",
     data.unreadContactMessages == null ? "—" : String(data.unreadContactMessages),
@@ -1785,6 +1740,51 @@ function emaUserDetail(u) {
   return wrap;
 }
 
+// R50: study-window chip. Dates are fixed protocol dates, hardcoded on
+// purpose (no API cost). Day math uses Chicago-local Y-M-D strings to
+// avoid UTC drift (the R46.3 timezone lesson): lexicographic compare of
+// ISO dates is correct, and diffs run on midnight-UTC parses of the
+// already-localized date strings so DST can't skew them.
+const EMA_WINDOWS = [
+  { label: "Pre-test", start: "2026-06-11", end: "2026-06-14" },
+  { label: "Post-test", start: "2026-07-30", end: "2026-08-02" },
+];
+
+function chicagoToday() {
+  // en-CA locale formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+}
+
+function emaDayDiff(a, b) {
+  // Pure-date diff in days; both args are Chicago-local YYYY-MM-DD.
+  return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000);
+}
+
+function emaShortDate(s) {
+  return new Date(s + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function emaWindowState(today) {
+  for (const w of EMA_WINDOWS) {
+    if (today >= w.start && today <= w.end) {
+      return {
+        active: true,
+        text: w.label + " window · Day " + (emaDayDiff(w.start, today) + 1) + " of " + (emaDayDiff(w.start, w.end) + 1),
+      };
+    }
+  }
+  for (const w of EMA_WINDOWS) {
+    if (today < w.start) {
+      const n = emaDayDiff(today, w.start);
+      return {
+        active: false,
+        text: w.label + " starts " + (n === 1 ? "tomorrow" : "in " + n + " days") + " (" + emaShortDate(w.start) + ")",
+      };
+    }
+  }
+  return { active: false, text: "Both study windows complete" };
+}
+
 function mountEmaCompliancePanel() {
   const root = document.getElementById("ema-compliance-panel");
   if (!root) return;
@@ -1796,9 +1796,18 @@ function mountEmaCompliancePanel() {
   const rosterWrap = el("div", { class: "table-wrap" });
   const refreshBtn = el("button", { class: "btn btn--ghost btn--small", type: "button", title: "Manual refresh" }, ["Refresh"]);
 
+  const windowChip = el("span", { class: "ema-window-chip" });
+  const updateWindowChip = () => {
+    const s = emaWindowState(chicagoToday());
+    windowChip.textContent = s.text;
+    windowChip.classList.toggle("ema-window-chip--active", s.active);
+  };
+  updateWindowChip();
+
   root.appendChild(el("header", { class: "panel__head" }, [
     el("div", { class: "panel__title" }, [
       el("h2", null, ["Survey Compliance"]),
+      windowChip,
       el("span", { class: "panel__hint" }, ["Rates are vs prompts already due"]),
     ]),
     el("div", { class: "panel__actions" }, [refreshBtn]),
@@ -1810,6 +1819,9 @@ function mountEmaCompliancePanel() {
   root.appendChild(rosterWrap);
 
   const load = async () => {
+    // Recompute the window chip on every manual refresh so a dashboard
+    // left open across midnight CT rolls the day counter forward.
+    updateWindowChip();
     statGrid.replaceChildren(el("div", { class: "status-tile status-tile--placeholder" }, ["Loading…"]));
     blockWrap.replaceChildren();
     rosterWrap.replaceChildren();
@@ -2068,7 +2080,6 @@ window.ProudMeAdminPanels = {
     startStatusPolling();
     mountAnalytics();
     createAuditPanel(SAFETY_PANEL);
-    createAuditPanel(DISPATCH_PANEL);
     createAuditPanel(CONTACT_PANEL);
     mountRosterPanel();
     mountEmaEnrollPanel();

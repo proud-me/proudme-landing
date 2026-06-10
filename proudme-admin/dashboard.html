@@ -26,7 +26,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <!-- RELEASE CONVENTION (R50+): bump the ?v= tag on styles.css / app.js /
+       panels.js in BOTH index.html and dashboard.html on EVERY release.
+       GitHub Pages caches for 600s and Render serves /admin static with
+       maxAge 1h; the version tag prevents mixed-version HTML/JS skew. -->
+  <link rel="stylesheet" href="styles.css?v=r50">
   <link rel="icon" href="../assets/appicon-indigo.svg" type="image/svg+xml">
 </head>
 <body class="dash-page">
@@ -40,6 +44,20 @@
       </div>
       <button id="logout-btn" class="btn btn--ghost" type="button">Log out</button>
     </div>
+    <!-- R50: anchor shortcuts; pure HTML, targets are the static section
+         mounts below so links work even before panels render. -->
+    <nav class="dash-jumpnav" aria-label="Panel shortcuts">
+      <div class="dash-jumpnav__inner">
+        <a href="#status-panel">Status</a>
+        <a href="#analytics-panel">Analytics</a>
+        <a href="#ema-enroll-panel">EMA</a>
+        <a href="#adherence-panel">Adherence</a>
+        <a href="#safety-panel">Safety</a>
+        <a href="#contact-panel">Contact</a>
+        <a href="#roster-panel">Roster</a>
+        <a href="#signups-panel">Signups</a>
+      </div>
+    </nav>
   </header>
 
   <main class="dash-main">
@@ -95,8 +113,6 @@
 
     <section id="safety-panel" aria-label="AI Safety Audit"></section>
 
-    <section id="dispatch-panel" aria-label="Counselor Dispatch Queue"></section>
-
     <section id="contact-panel" aria-label="Contact Submissions"></section>
 
     <section id="roster-panel" aria-label="Registered Students"></section>
@@ -116,7 +132,7 @@
     </div>
   </aside>
 
-  <script src="app.js"></script>
-  <script src="panels.js"></script>
+  <script src="app.js?v=r50"></script>
+  <script src="panels.js?v=r50"></script>
 </body>
 </html>
