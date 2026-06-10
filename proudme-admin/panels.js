@@ -1648,6 +1648,27 @@ function emaEnrollRow(user) {
       status.textContent = "Error: " + (err.message || "failed");
     }
   };
+  // R49: send a one-off survey-test PUSH to this camper's registered device so
+  // the PI can verify the push -> Qualtrics path end-to-end (separate from the
+  // in-app "sample survey prompt" which only tests LOCAL notifications).
+  const doPush = async () => {
+    status.textContent = "Sending…";
+    try {
+      await window.ProudMeAdmin.fetchAdmin("/admin/push/survey-test", {
+        method: "POST",
+        body: { userId: user._id },
+      });
+      status.textContent = "✓ Test push sent";
+    } catch (err) {
+      // fetchAdmin embeds the raw JSON error body in the message; pull out the
+      // human-readable reason so common cases (no device registered yet, push
+      // not configured) read cleanly instead of "Request failed: 404 {…}".
+      let msg = err && err.message ? err.message : "failed";
+      const m = msg.match(/"message":"([^"]+)"/);
+      if (m) msg = m[1];
+      status.textContent = "⚠ " + msg;
+    }
+  };
   const name =
     user.name ||
     [user.firstName, user.lastName].filter(Boolean).join(" ") ||
@@ -1661,6 +1682,7 @@ function emaEnrollRow(user) {
     el("div", { class: "ema-row__actions" }, [
       el("button", { class: "btn btn--primary btn--small", type: "button", onClick: () => doEnroll(true) }, ["Enroll"]),
       el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: () => doEnroll(false) }, ["Unenroll"]),
+      el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: doPush }, ["Send test push"]),
       status,
     ]),
   ]);
