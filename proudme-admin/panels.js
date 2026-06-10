@@ -1722,10 +1722,17 @@ function mountEmaEnrollPanel() {
     try {
       const r = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enroll-bulk", { method: "POST", body: { emails, enrolled } });
       const bad = (r.results || []).filter((x) => !x.ok);
-      bulkOut.replaceChildren(
+      // R49.1c: build the children array first. Passing a literal `null` to the
+      // native replaceChildren stringifies it to the text "null" (unlike the
+      // el() helper, which skips null children). That stray "null" showed under
+      // "Enrolled N of N" whenever every pasted email matched.
+      const out = [
         el("div", null, [(enrolled ? "Enrolled " : "Unenrolled ") + (r.updated || 0) + " of " + r.requested + "."]),
-        bad.length ? el("div", { class: "muted" }, ["Not matched: " + bad.map((x) => x.email).join(", ")]) : null,
-      );
+      ];
+      if (bad.length) {
+        out.push(el("div", { class: "muted" }, ["Not matched: " + bad.map((x) => x.email).join(", ")]));
+      }
+      bulkOut.replaceChildren.apply(bulkOut, out);
     } catch (err) {
       bulkOut.replaceChildren(document.createTextNode("Bulk failed: " + (err.message || "unknown")));
     }
