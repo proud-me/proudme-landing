@@ -1589,6 +1589,34 @@ function emaPct(n) {
 }
 
 // One search-result row with Enroll / Unenroll actions.
+// R49.1: a copy-able camper ID. This is the same value that flows to Qualtrics
+// as the survey PID, so showing it next to each account lets the operator match
+// a survey-export PID back to a camper (Ctrl+F the roster, or copy it). It is
+// the ProudMe account id, not the login email (kept out of Qualtrics for PII).
+function pidChip(id) {
+  if (!id) return el("span", { class: "muted" }, ["no device/account id"]);
+  const value = String(id);
+  const btn = el("button", {
+    class: "btn btn--ghost btn--small",
+    type: "button",
+    title: "Copy PID to clipboard",
+    onClick: () => {
+      try {
+        navigator.clipboard.writeText(value);
+        btn.textContent = "✓ Copied";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1200);
+      } catch (_) {
+        btn.textContent = "Copy failed";
+      }
+    },
+  }, ["Copy"]);
+  return el("span", { class: "pid-chip" }, [
+    el("code", { title: "Participant ID - matches the Qualtrics export PID column" }, [value]),
+    " ",
+    btn,
+  ]);
+}
+
 function emaEnrollRow(user) {
   const status = el("span", { class: "muted ema-row__status" }, [""]);
   const doEnroll = async (enrolled) => {
@@ -1633,6 +1661,7 @@ function emaEnrollRow(user) {
       el("strong", null, [name]),
       el("span", { class: "muted" }, [" · " + (user.email || "—")]),
       user.gradeLevel ? el("span", { class: "muted" }, [" · grade " + user.gradeLevel]) : null,
+      el("div", { class: "ema-row__pid" }, ["PID: ", pidChip(user._id)]),
     ]),
     el("div", { class: "ema-row__actions" }, [
       el("button", { class: "btn btn--primary btn--small", type: "button", onClick: () => doEnroll(true) }, ["Enroll"]),
@@ -1890,7 +1919,10 @@ function mountEmaCompliancePanel() {
           }
         } }, ["View"]);
         tb.appendChild(el("tr", null, [
-          el("td", null, [r.name || "(no name)"]),
+          el("td", null, [
+            el("div", null, [r.name || "(no name)"]),
+            el("div", { class: "ema-row__pid" }, ["PID: ", pidChip(r.userId)]),
+          ]),
           el("td", null, [r.email || "—"]),
           el("td", null, [r.gradeLevel || "—"]),
           el("td", null, [r.responded + "/" + r.due]),
