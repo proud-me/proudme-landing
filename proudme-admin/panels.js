@@ -1924,6 +1924,116 @@ function mountSignupsPanel() {
   load();
 }
 
+// ---------- R48: weekly/monthly goal adherence -----------------------------
+// Per-camper count of days each behavior's daily goal was met, for the current
+// week and month. The objective adherence number behind the kids' consistency
+// goals; this is the PI-facing deliverable.
+
+var ADH_LABELS = {
+  activity: "Activity",
+  eating: "Eating (F&V)",
+  sleep: "Sleep",
+  screentime: "Screen time",
+};
+
+function adhCellKind(hit, elapsed) {
+  if (!elapsed) return "";
+  var p = hit / elapsed;
+  if (p >= 0.7) return "ok";
+  if (p >= 0.4) return "warn";
+  return "bad";
+}
+
+function mountAdherencePanel() {
+  const root = document.getElementById("adherence-panel");
+  if (!root) return;
+  root.classList.add("panel");
+  root.replaceChildren();
+
+  let mode = "weekly";
+  let cache = null;
+
+  const weekBtn = el("button", { class: "btn btn--small", type: "button" }, ["Week"]);
+  const monthBtn = el("button", { class: "btn btn--ghost btn--small", type: "button" }, ["Month"]);
+  const refreshBtn = el("button", { class: "btn btn--ghost btn--small", type: "button" }, ["Refresh"]);
+  const body = el("div", { class: "adherence-body" }, [el("p", { class: "muted" }, ["Loading…"])]);
+
+  root.appendChild(el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, ["Goal Adherence"]),
+      el("span", { class: "panel__hint" }, ["Days each camper hit their daily goal"]),
+    ]),
+    el("div", { class: "panel__actions" }, [weekBtn, monthBtn, refreshBtn]),
+  ]));
+  root.appendChild(body);
+
+  const render = () => {
+    if (!cache) return;
+    const period = mode === "monthly" ? cache.month : cache.week;
+    const elapsed = (period && period.daysElapsed) || 0;
+    const behaviors = cache.behaviors || ["activity", "eating", "sleep", "screentime"];
+    const tiles = el("div", { class: "status-grid" }, [
+      statusTile("View", mode === "monthly" ? "Monthly" : "Weekly", ""),
+      statusTile(
+        mode === "monthly" ? "Month" : "Week",
+        mode === "monthly"
+          ? (cache.month && cache.month.label) || "—"
+          : ((cache.week && cache.week.start) || "—") + " – " + ((cache.week && cache.week.end) || "—"),
+        ""
+      ),
+      statusTile("Days elapsed", elapsed + " of " + ((period && period.totalDays) || "—"), ""),
+      statusTile("Campers", String(cache.count || 0), ""),
+    ]);
+
+    const head = el("tr", null, [el("th", null, ["Camper"])].concat(
+      behaviors.map((b) => el("th", null, [ADH_LABELS[b] || b]))
+    ));
+    const campers = cache.campers || [];
+    const rows = campers.map((c) => {
+      const data = (mode === "monthly" ? c.monthly : c.weekly) || {};
+      const cells = behaviors.map((b) => {
+        const hit = data[b] || 0;
+        return el("td", { class: "adh-cell adh-cell--" + (adhCellKind(hit, elapsed) || "none") }, [
+          hit + "/" + elapsed,
+        ]);
+      });
+      return el("tr", null, [
+        el("td", { class: "adh-name" }, [c.name || c.email || "—"]),
+      ].concat(cells));
+    });
+    const tbody = el("tbody", null, rows.length
+      ? rows
+      : [el("tr", null, [el("td", { class: "muted", colspan: String(behaviors.length + 1) }, ["No campers yet."])])]);
+    const table = el("table", { class: "audit-table adherence-table" }, [
+      el("thead", null, [head]),
+      tbody,
+    ]);
+    body.replaceChildren(tiles, el("div", { class: "adherence-scroll" }, [table]));
+  };
+
+  const setMode = (m) => {
+    mode = m;
+    weekBtn.className = "btn btn--small" + (m === "weekly" ? "" : " btn--ghost");
+    monthBtn.className = "btn btn--small" + (m === "monthly" ? "" : " btn--ghost");
+    render();
+  };
+
+  const load = async () => {
+    body.replaceChildren(el("p", { class: "muted" }, ["Loading…"]));
+    try {
+      cache = await window.ProudMeAdmin.fetchAdmin("/admin/analytics/adherence");
+      render();
+    } catch (err) {
+      body.replaceChildren(el("p", { class: "muted" }, ["Adherence failed: " + (err.message || "unknown")]));
+    }
+  };
+
+  weekBtn.addEventListener("click", () => setMode("weekly"));
+  monthBtn.addEventListener("click", () => setMode("monthly"));
+  refreshBtn.addEventListener("click", load);
+  load();
+}
+
 // ---------- Boot ----------------------------------------------------------
 
 window.ProudMeAdminPanels = {
@@ -1941,6 +2051,7 @@ window.ProudMeAdminPanels = {
     mountRosterPanel();
     mountEmaEnrollPanel();
     mountEmaCompliancePanel();
+    mountAdherencePanel();
     mountSignupsPanel();
   },
   // Round 18.1 reviewer fix: surface stopStatusPolling so app.js
