@@ -1825,6 +1825,45 @@ function mountEmaCompliancePanel() {
   const rosterWrap = el("div", { class: "table-wrap" });
   const refreshBtn = el("button", { class: "btn btn--ghost btn--small", type: "button", title: "Manual refresh" }, ["Refresh"]);
 
+  // R49.1b: broadcast a survey-test push to all enrolled campers who have a
+  // registered device. A camper only has one after installing + opening Build 25
+  // (which registers the APNs token); earlier builds register nothing, so they
+  // are skipped. The result spells out reachable-vs-enrolled so it is obvious
+  // when "0 sent" just means nobody has updated yet.
+  const pushAllBtn = el("button", {
+    class: "btn btn--ghost btn--small",
+    type: "button",
+    title: "Send a survey-test push to every enrolled camper who has a registered device (Build 25+).",
+    onClick: async () => {
+      if (!window.confirm("Send a TEST survey push to ALL enrolled campers who have a registered device?\n\nCampers on builds before Build 25 have no device registered yet and are skipped.")) {
+        return;
+      }
+      const prev = pushAllBtn.textContent;
+      pushAllBtn.textContent = "Sending…";
+      pushAllBtn.disabled = true;
+      try {
+        const r = await window.ProudMeAdmin.fetchAdmin("/admin/push/survey-test-all", { method: "POST", body: {} });
+        const enrolled = (r && r.enrolled) || 0;
+        const withDevice = (r && r.withDevice) || 0;
+        const sent = (r && r.sent) || 0;
+        const failed = (r && r.failed) || 0;
+        if (withDevice === 0) {
+          window.alert("No enrolled camper has a registered device yet.\n\nThey need Build 25 installed + opened on an iPhone (notifications allowed) before a push can reach them.\n\nEnrolled: " + enrolled);
+        } else {
+          window.alert("Test push sent to " + sent + " of " + withDevice + " devices (failed: " + failed + ").\n\nEnrolled campers: " + enrolled + "\nWith a registered device: " + withDevice);
+        }
+      } catch (err) {
+        let msg = err && err.message ? err.message : "failed";
+        const m = msg.match(/"message":"([^"]+)"/);
+        if (m) msg = m[1];
+        window.alert("Broadcast failed: " + msg);
+      } finally {
+        pushAllBtn.textContent = prev;
+        pushAllBtn.disabled = false;
+      }
+    },
+  }, ["Test push → all enrolled"]);
+
   const windowChip = el("span", { class: "ema-window-chip" });
   const updateWindowChip = () => {
     const s = emaWindowState(chicagoToday());
@@ -1839,7 +1878,7 @@ function mountEmaCompliancePanel() {
       windowChip,
       el("span", { class: "panel__hint" }, ["Rates are vs prompts already due"]),
     ]),
-    el("div", { class: "panel__actions" }, [refreshBtn]),
+    el("div", { class: "panel__actions" }, [pushAllBtn, refreshBtn]),
   ]));
   root.appendChild(statGrid);
   root.appendChild(el("h3", { class: "chart-card__title" }, ["By block"]));
