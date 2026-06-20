@@ -44,6 +44,38 @@ async function downloadAdminCsv(endpoint, filters) {
   }
 }
 
+// Camp EMA study (2026-06-19): cohort research export. Separate from
+// downloadAdminCsv because that helper hard-caps limit=200 (a roster page
+// size) which would silently truncate a study pull; the study-data endpoint
+// caps server-side at 50k rows instead, so we don't pass a limit here.
+//   dataset "behaviors" -> 4 behaviors + reflections + AI feedback
+//   dataset "chat"      -> Pebble chat (voice turns land here as text)
+async function downloadStudyData(dataset, sinceISO) {
+  try {
+    const q = new URLSearchParams();
+    q.set("dataset", dataset);
+    q.set("format", "csv");
+    if (sinceISO) q.set("since", sinceISO);
+    const csvText = await window.ProudMeAdmin.fetchAdmin(
+      "/admin/export/study-data?" + q.toString()
+    );
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.download = `study-${dataset}-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 100);
+  } catch (err) {
+    alert("Study-data download failed: " + (err.message || "unknown"));
+  }
+}
+
 // ---------- DOM helpers ---------------------------------------------------
 
 // Creates an element with optional attrs, dataset, and children. Never
@@ -1200,6 +1232,30 @@ function mountRosterPanel() {
     groupToggle.appendChild(chip);
   }
 
+  // Camp EMA study research export. A "since" date scopes the pull to a
+  // study week (blank = all). Two datasets because behaviors and chat have
+  // different columns and can't share one CSV: behaviors carries the four
+  // goal entries + reflections + AI feedback; chat carries Pebble messages
+  // (voice turns appear here as transcribed text, no audio).
+  const studySince = el("input", {
+    type: "date",
+    class: "filter-input",
+    title: "Only include data on/after this date (study week start, UTC-ish). Leave blank to export everything.",
+  });
+  const sinceIso = () => (studySince.value ? new Date(studySince.value).toISOString() : "");
+  const studyBehaviorsBtn = el("button", {
+    class: "btn btn--ghost btn--small",
+    type: "button",
+    title: "All students: 4 behaviors + text reflections + AI feedback (CSV)",
+    onClick: () => downloadStudyData("behaviors", sinceIso()),
+  }, ["Behaviors CSV"]);
+  const studyChatBtn = el("button", {
+    class: "btn btn--ghost btn--small",
+    type: "button",
+    title: "All students: Pebble chat transcripts (CSV). Voice turns appear as text. Chat auto-deletes after 30 days, so pull week-1 soon.",
+    onClick: () => downloadStudyData("chat", sinceIso()),
+  }, ["Chat CSV"]);
+
   root.appendChild(el("div", { class: "roster-controls" }, [
     el("div", { class: "roster-controls__row" }, [
       searchInput,
@@ -1209,6 +1265,13 @@ function mountRosterPanel() {
     el("div", { class: "roster-controls__row" }, [
       el("span", { class: "filter-group__label" }, ["View"]),
       groupToggle,
+    ]),
+    el("div", { class: "roster-controls__row" }, [
+      el("span", { class: "filter-group__label" }, ["Study export"]),
+      el("span", { class: "panel__hint" }, ["Since"]),
+      studySince,
+      studyBehaviorsBtn,
+      studyChatBtn,
     ]),
   ]));
 
@@ -1453,6 +1516,9 @@ function openRosterDrawer(row) {
 
   const dl = el("dl", { class: "drawer-dl" });
   const fields = [
+    // Username (the `name` field) is the login handle the camp needs to
+    // hand back to each kid. Not gated like email: it's a login id, not PII.
+    ["Username", row.name],
     ["School", row.schoolName],
     ["Grade", row.gradeLevel],
     ["Birth month", row.birthMonth],
@@ -1473,6 +1539,58 @@ function openRosterDrawer(row) {
     dl.appendChild(el("dd", null, [v == null || v === "" ? "—" : String(v)]));
   }
   body.appendChild(dl);
+
+  // Camp EMA study: set-password tool. Passwords are bcrypt-hashed (can't be
+  // read back) and the /forgot-password code emails an address that isn't the
+  // kid's, so the operator sets a known password here and records it. The
+  // input is type=text on purpose: the operator MUST see and write down the
+  // value to hand to the camp; this is an intentional shared credential behind
+  // the admin allowlist, not a secret to mask.
+  body.appendChild(el("hr", { class: "drawer-rule" }));
+  body.appendChild(el("h3", { class: "drawer-section-title" }, ["Set password"]));
+  body.appendChild(el("p", { class: "drawer-note" }, [
+    "Passwords can't be looked up. Set a known one, then write down the username + password for the camp. The kid logs in on the new device with the same username.",
+  ]));
+  const pwInput = el("input", {
+    type: "text",
+    class: "filter-input",
+    placeholder: "New password (8+ chars, a letter + a digit)",
+    autocomplete: "off",
+  });
+  const pwStatus = el("div", { class: "drawer-note", hidden: "" }, [""]);
+  const pwBtn = el("button", {
+    class: "btn btn--small",
+    type: "button",
+    onClick: async () => {
+      const newPassword = String(pwInput.value || "");
+      // Mirror the backend PASSWORD_POLICY so the operator gets instant
+      // feedback instead of a round-trip 400.
+      if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(newPassword)) {
+        pwStatus.textContent = "Password must be at least 8 characters and include a letter and a digit.";
+        pwStatus.removeAttribute("hidden");
+        return;
+      }
+      pwBtn.disabled = true;
+      pwStatus.textContent = "Setting…";
+      pwStatus.removeAttribute("hidden");
+      try {
+        const resp = await window.ProudMeAdmin.fetchAdmin(
+          "/admin/users/" + row._id + "/set-password",
+          { method: "POST", body: { newPassword } }
+        );
+        const uname = (resp && resp.username) || row.name || "(unknown)";
+        pwStatus.textContent =
+          "Done. Username: " + uname + "  ·  Password: " + newPassword +
+          "  — write these down now; the password cannot be recovered later.";
+      } catch (err) {
+        pwStatus.textContent = "Failed: " + (err.message || "unknown");
+      } finally {
+        pwBtn.disabled = false;
+      }
+    },
+  }, ["Set password"]);
+  body.appendChild(el("div", { class: "drawer-setpw" }, [pwInput, " ", pwBtn]));
+  body.appendChild(pwStatus);
 
   // Phase 6: per-student timeline section.
   body.appendChild(el("hr", { class: "drawer-rule" }));
