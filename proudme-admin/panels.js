@@ -2105,6 +2105,151 @@ function mountEmaCompliancePanel() {
   load();
 }
 
+// ---------- On-demand survey push (custom copy + link) --------------------
+
+// Default survey link; mirrors EMA_SURVEY_BASE on the server so the field is
+// prefilled with the camp's Qualtrics form. The operator can replace it per send.
+const SURVEY_PUSH_DEFAULT_URL =
+  "https://lsu.qualtrics.com/jfe/form/SV_7OJHqq1gm13yufc";
+
+// Send a real survey push with operator-typed title/body/link. Distinct from the
+// "Send test push" buttons (fixed copy): this carries t:"survey" so the app opens
+// an in-app landing page first. Targets all enrolled campers or one searched camper.
+function mountSurveyPushPanel() {
+  const root = document.getElementById("survey-push-panel");
+  if (!root) return;
+  root.classList.add("panel");
+  root.replaceChildren();
+
+  root.appendChild(el("header", { class: "panel__head" }, [
+    el("div", { class: "panel__title" }, [
+      el("h2", null, ["Send a Survey Notification"]),
+      el("span", { class: "panel__hint" }, ["Custom push to the in-app survey page"]),
+    ]),
+  ]));
+  root.appendChild(el("div", { class: "dash-banner" }, [
+    el("strong", null, ["Sends a real push. "]),
+    "Tapping it opens a page in the app with a “Take the survey” button (parental gate), then your link. Only iPhones on Build 25+ with notifications allowed can receive it.",
+  ]));
+
+  const titleInput = el("input", { type: "text", class: "filter-input", maxlength: "120", placeholder: "Notification title (e.g. ProudMe survey)" });
+  const bodyInput = el("textarea", { class: "filter-input", rows: "2", maxlength: "300", placeholder: "Message (e.g. We’d love your feedback — tap to take a quick survey.)" });
+  const urlInput = el("input", { type: "url", class: "filter-input", placeholder: "https://..." });
+  urlInput.value = SURVEY_PUSH_DEFAULT_URL;
+
+  // Target: all enrolled (default) or one searched camper.
+  const targetEnrolled = el("input", { type: "radio", name: "survey-push-target", value: "enrolled" });
+  targetEnrolled.checked = true;
+  const targetUser = el("input", { type: "radio", name: "survey-push-target", value: "user" });
+
+  let selectedUserId = null;
+  const selectedLabel = el("span", { class: "muted" }, ["No camper selected."]);
+
+  const searchInput = el("input", { type: "search", class: "filter-input", placeholder: "Search name or email", autocomplete: "off" });
+  const results = el("div", { class: "ema-results" });
+
+  const pickRow = (user) => {
+    const name = user.name || [user.firstName, user.lastName].filter(Boolean).join(" ") || "(no name)";
+    return el("div", { class: "ema-row" }, [
+      el("div", { class: "ema-row__main" }, [
+        el("strong", null, [name]),
+        el("span", { class: "muted" }, [" · " + (user.email || "—")]),
+      ]),
+      el("div", { class: "ema-row__actions" }, [
+        el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: () => {
+          selectedUserId = user._id;
+          selectedLabel.textContent = "Selected: " + name + " (" + (user.email || "—") + ")";
+        } }, ["Select"]),
+      ]),
+    ]);
+  };
+
+  const runSearch = async () => {
+    const q = String(searchInput.value || "").trim();
+    if (!q) { results.replaceChildren(el("p", { class: "muted" }, ["Type a name or email, then Search."])); return; }
+    results.replaceChildren(el("p", { class: "muted" }, ["Searching…"]));
+    try {
+      const data = await window.ProudMeAdmin.fetchAdmin("/admin/users?q=" + encodeURIComponent(q) + "&limit=25");
+      const users = (data && data.users) || [];
+      if (users.length === 0) { results.replaceChildren(el("p", { class: "muted" }, ["No matching accounts."])); return; }
+      results.replaceChildren.apply(results, users.map(pickRow));
+    } catch (err) {
+      results.replaceChildren(el("p", { class: "muted" }, ["Search failed: " + (err.message || "unknown")]));
+    }
+  };
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } });
+
+  const userPicker = el("div", null, [
+    el("div", { class: "ema-search-row" }, [
+      searchInput,
+      el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: runSearch }, ["Search"]),
+    ]),
+    selectedLabel,
+    results,
+  ]);
+  userPicker.hidden = true;
+  const syncTargetUi = () => { userPicker.hidden = !targetUser.checked; };
+  targetEnrolled.addEventListener("change", syncTargetUi);
+  targetUser.addEventListener("change", syncTargetUi);
+
+  const status = el("span", { class: "muted" });
+  const sendBtn = el("button", { class: "btn btn--primary btn--small", type: "button" }, ["Send notification"]);
+  sendBtn.addEventListener("click", async () => {
+    const title = String(titleInput.value || "").trim();
+    const message = String(bodyInput.value || "").trim();
+    const url = String(urlInput.value || "").trim();
+    const target = targetUser.checked ? "user" : "enrolled";
+    if (!title) { status.textContent = "⚠ Add a title."; return; }
+    if (!message) { status.textContent = "⚠ Add a message."; return; }
+    if (!/^https?:\/\/.+/i.test(url)) { status.textContent = "⚠ Add a valid http(s) link."; return; }
+    if (target === "user" && !selectedUserId) { status.textContent = "⚠ Search and select a camper."; return; }
+    const who = target === "user" ? "the selected camper" : "ALL enrolled campers who have a registered device";
+    if (!window.confirm("Send this survey notification to " + who + "?")) return;
+    const prev = sendBtn.textContent;
+    sendBtn.textContent = "Sending…";
+    sendBtn.disabled = true;
+    status.textContent = "";
+    try {
+      const reqBody = { title, body: message, url, target };
+      if (target === "user") reqBody.userId = selectedUserId;
+      const r = await window.ProudMeAdmin.fetchAdmin("/admin/push/survey-send", { method: "POST", body: reqBody });
+      const withDevice = (r && r.withDevice) || 0;
+      const sent = (r && r.sent) || 0;
+      const failed = (r && r.failed) || 0;
+      const enrolledCount = (r && r.enrolled) || 0;
+      if (withDevice === 0) {
+        status.textContent = "No reachable device yet (enrolled: " + enrolledCount + "). They need Build 25+ installed with notifications allowed.";
+      } else {
+        status.textContent = "✓ Sent to " + sent + " of " + withDevice + " device(s) (failed: " + failed + ").";
+      }
+    } catch (err) {
+      let msg = err && err.message ? err.message : "failed";
+      const m = msg.match(/"message":"([^"]+)"/);
+      if (m) msg = m[1];
+      status.textContent = "⚠ " + msg;
+    } finally {
+      sendBtn.textContent = prev;
+      sendBtn.disabled = false;
+    }
+  });
+
+  root.appendChild(el("div", { class: "survey-push-form" }, [
+    el("label", { class: "muted" }, ["Title"]),
+    titleInput,
+    el("label", { class: "muted" }, ["Message"]),
+    bodyInput,
+    el("label", { class: "muted" }, ["Survey link"]),
+    urlInput,
+    el("label", { class: "muted" }, ["Send to"]),
+    el("div", { class: "survey-push-targets" }, [
+      el("label", null, [targetEnrolled, " All enrolled campers"]),
+      el("label", null, [targetUser, " One camper"]),
+    ]),
+    userPicker,
+    el("div", { class: "ema-row__actions" }, [sendBtn, status]),
+  ]));
+}
+
 // ---------- New-signups growth (R47) --------------------------------------
 
 function mountSignupsPanel() {
@@ -2280,6 +2425,7 @@ window.ProudMeAdminPanels = {
     mountRosterPanel();
     mountEmaEnrollPanel();
     mountEmaCompliancePanel();
+    mountSurveyPushPanel();
     mountAdherencePanel();
     mountSignupsPanel();
   },

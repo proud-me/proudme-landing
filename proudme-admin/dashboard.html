@@ -30,7 +30,7 @@
        panels.js in BOTH index.html and dashboard.html on EVERY release.
        GitHub Pages caches for 600s and Render serves /admin static with
        maxAge 1h; the version tag prevents mixed-version HTML/JS skew. -->
-  <link rel="stylesheet" href="styles.css?v=r51">
+  <link rel="stylesheet" href="styles.css?v=r52">
   <link rel="icon" href="../assets/appicon-indigo.svg" type="image/svg+xml">
 </head>
 <body class="dash-page">
@@ -51,6 +51,7 @@
         <a href="#status-panel">Status</a>
         <a href="#analytics-panel">Analytics</a>
         <a href="#ema-enroll-panel">EMA</a>
+        <a href="#survey-push-panel">Notify</a>
         <a href="#adherence-panel">Adherence</a>
         <a href="#safety-panel">Safety</a>
         <a href="#contact-panel">Contact</a>
@@ -108,6 +109,9 @@
 
     <section id="ema-compliance-panel" aria-label="EMA Survey Compliance"></section>
 
+    <!-- On-demand survey push: custom title/body/link -> in-app survey page -->
+    <section id="survey-push-panel" aria-label="Send a Survey Notification"></section>
+
     <!-- R48: weekly/monthly goal adherence per camper -->
     <section id="adherence-panel" aria-label="Goal Adherence"></section>
 
@@ -132,7 +136,7 @@
     </div>
   </aside>
 
-  <script src="app.js?v=r51"></script>
-  <script src="panels.js?v=r51"></script>
+  <script src="app.js?v=r52"></script>
+  <script src="panels.js?v=r52"></script>
 </body>
 </html>
