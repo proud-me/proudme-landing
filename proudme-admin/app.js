@@ -10,10 +10,12 @@ if (window.top !== window.self) {
 // ProudMe Admin Dashboard, vanilla JS, no build step.
 // Phase 1: auth state machine + idle timer + fetchAdmin helper.
 //
-// R47: the dashboard is now served BY the backend (Express, /admin/*), so it
-// is same-origin. Use the page origin instead of a hard-coded Render URL, so
-// the console works on any deploy (and no longer depends on a WEB_ORIGIN CORS
-// allowlist, since same-origin requests are not cross-origin).
+// This is the CROSS-ORIGIN copy (GitHub Pages, proudme.org/proudme-admin):
+// the API lives on Render, so the URL is hard-coded and every request relies
+// on the backend's CORS allowlist including the proudme.org origin. The
+// backend-served copy (server/public/admin/app.js) is same-origin and uses
+// window.location.origin instead - that line is the ONLY divergence between
+// the two app.js copies; keep it that way when syncing.
 const BACKEND_URL = "https://proudme-backend.onrender.com";
 
 // 30 minutes of no user interaction triggers auto-logout.

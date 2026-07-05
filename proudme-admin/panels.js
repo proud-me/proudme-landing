@@ -1581,7 +1581,7 @@ function openRosterDrawer(row) {
         const uname = (resp && resp.username) || row.name || "(unknown)";
         pwStatus.textContent =
           "Done. Username: " + uname + "  ·  Password: " + newPassword +
-          "  — write these down now; the password cannot be recovered later.";
+          "  - write these down now; the password cannot be recovered later.";
       } catch (err) {
         pwStatus.textContent = "Failed: " + (err.message || "unknown");
       } finally {
@@ -1735,16 +1735,31 @@ function pidChip(id) {
   ]);
 }
 
+// R53: cohort drives which survey blocks a participant's windows use (camp
+// weeks = after-camp blocks only). "Keep" leaves the stored value untouched.
+// One builder so the per-row and bulk selects can never drift apart.
+function emaCohortSelect(title) {
+  return el("select", { class: "filter-input", title }, [
+    el("option", { value: "" }, ["Cohort: keep"]),
+    el("option", { value: "1" }, ["Cohort 1"]),
+    el("option", { value: "2" }, ["Cohort 2"]),
+  ]);
+}
+
 function emaEnrollRow(user) {
   const status = el("span", { class: "muted ema-row__status" }, [""]);
+  const cohortSel = emaCohortSelect("Cohort (drives which survey blocks fire on camp vs remote weeks)");
   const doEnroll = async (enrolled) => {
     status.textContent = "Saving…";
     try {
+      const body = { userId: user._id, enrolled };
+      if (cohortSel.value) body.cohort = Number(cohortSel.value);
       const r = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enroll", {
         method: "POST",
-        body: { userId: user._id, enrolled },
+        body,
       });
-      status.textContent = r && r.emaEnrolled ? "✓ Enrolled" : "Not enrolled";
+      const c = r && r.emaCohort != null ? " (C" + r.emaCohort + ")" : " (no cohort!)";
+      status.textContent = r && r.emaEnrolled ? "✓ Enrolled" + c : "Not enrolled";
     } catch (err) {
       status.textContent = "Error: " + (err.message || "failed");
     }
@@ -1782,6 +1797,7 @@ function emaEnrollRow(user) {
       el("div", { class: "ema-row__pid" }, ["PID: ", pidChip(user._id)]),
     ]),
     el("div", { class: "ema-row__actions" }, [
+      cohortSel,
       el("button", { class: "btn btn--primary btn--small", type: "button", onClick: () => doEnroll(true) }, ["Enroll"]),
       el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: () => doEnroll(false) }, ["Unenroll"]),
       el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: doPush }, ["Send test push"]),
@@ -1833,12 +1849,18 @@ function mountEmaEnrollPanel() {
   // Bulk enroll.
   const bulkArea = el("textarea", { class: "filter-input ema-bulk", rows: "4", placeholder: "Paste emails (one per line or comma-separated)" });
   const bulkOut = el("div", { class: "ema-bulk-out muted" });
+  // R53: optional cohort applied to the whole pasted batch. NOTE: several camp
+  // accounts share an email, so cohort assignment by email can hit the wrong
+  // sibling - the roster script assigns by userId; this is for corrections.
+  const bulkCohortSel = emaCohortSelect("Cohort applied to every pasted email (optional)");
   const runBulk = async (enrolled) => {
     const emails = String(bulkArea.value || "").split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
     if (emails.length === 0) { bulkOut.replaceChildren(document.createTextNode("Paste at least one email.")); return; }
     bulkOut.replaceChildren(document.createTextNode("Submitting " + emails.length + " email(s)…"));
     try {
-      const r = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enroll-bulk", { method: "POST", body: { emails, enrolled } });
+      const body = { emails, enrolled };
+      if (bulkCohortSel.value) body.cohort = Number(bulkCohortSel.value);
+      const r = await window.ProudMeAdmin.fetchAdmin("/admin/ema/enroll-bulk", { method: "POST", body });
       const bad = (r.results || []).filter((x) => !x.ok);
       // R49.1c: build the children array first. Passing a literal `null` to the
       // native replaceChildren stringifies it to the text "null" (unlike the
@@ -1848,7 +1870,11 @@ function mountEmaEnrollPanel() {
         el("div", null, [(enrolled ? "Enrolled " : "Unenrolled ") + (r.updated || 0) + " of " + r.requested + "."]),
       ];
       if (bad.length) {
-        out.push(el("div", { class: "muted" }, ["Not matched: " + bad.map((x) => x.email).join(", ")]));
+        // reason "cohort_required" = pick a cohort in the dropdown and retry;
+        // no reason shown = the email matched no account.
+        out.push(el("div", { class: "muted" }, [
+          "Failed: " + bad.map((x) => x.email + (x.reason && x.reason !== "not_found" ? " (" + x.reason + ")" : "")).join(", "),
+        ]));
       }
       bulkOut.replaceChildren.apply(bulkOut, out);
     } catch (err) {
@@ -1859,6 +1885,7 @@ function mountEmaEnrollPanel() {
     el("h3", { class: "chart-card__title" }, ["Bulk enroll a roster"]),
     bulkArea,
     el("div", { class: "ema-bulk-actions" }, [
+      bulkCohortSel,
       el("button", { class: "btn btn--primary btn--small", type: "button", onClick: () => runBulk(true) }, ["Enroll all"]),
       el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: () => runBulk(false) }, ["Unenroll all"]),
     ]),
@@ -1881,7 +1908,7 @@ function emaUserDetail(u) {
   const tb = el("tbody");
   (u.prompts || []).forEach((p) => {
     tb.appendChild(el("tr", null, [
-      el("td", null, ["P" + (p.period + 1)]),
+      el("td", null, [emaPeriodLabel(p.period)]),
       el("td", null, [String(p.dayNum)]),
       el("td", null, [String(p.blockNum)]),
       el("td", null, [fmtTs(p.scheduledAt)]),
@@ -1901,8 +1928,17 @@ function emaUserDetail(u) {
 // already-localized date strings so DST can't skew them.
 const EMA_WINDOWS = [
   { label: "Pre-test", start: "2026-06-11", end: "2026-06-14" },
-  { label: "Post-test", start: "2026-07-30", end: "2026-08-02" },
+  { label: "Week 5", start: "2026-07-14", end: "2026-07-16" },
+  { label: "Week 6", start: "2026-07-21", end: "2026-07-23" },
+  { label: "Post-test", start: "2026-07-28", end: "2026-07-30" },
 ];
+
+// R53: periods are protocol phases, not sequential rounds - name them the way
+// the researchers' schedule sheet does. Unknown numbers fall back verbatim.
+const EMA_PERIOD_LABELS = { 0: "Pre-test", 1: "Week 5", 2: "Week 6", 3: "Post-test" };
+function emaPeriodLabel(p) {
+  return EMA_PERIOD_LABELS[p] != null ? EMA_PERIOD_LABELS[p] : "Period " + p;
+}
 
 function chicagoToday() {
   // en-CA locale formats as YYYY-MM-DD.
@@ -1936,7 +1972,7 @@ function emaWindowState(today) {
       };
     }
   }
-  return { active: false, text: "Both study windows complete" };
+  return { active: false, text: "All study windows complete" };
 }
 
 function mountEmaCompliancePanel() {
@@ -2035,7 +2071,7 @@ function mountEmaCompliancePanel() {
       const bb = el("tbody");
       (c.byBlock || []).forEach((b) => {
         bb.appendChild(el("tr", null, [
-          el("td", null, ["Period " + (b.period + 1)]),
+          el("td", null, [emaPeriodLabel(b.period)]),
           el("td", null, ["Block " + b.blockNum]),
           el("td", null, [String(b.due)]),
           el("td", null, [String(b.responded)]),
@@ -2055,15 +2091,15 @@ function mountEmaCompliancePanel() {
       const rows = (data && data.enrolled) || [];
       const t = el("table", { class: "audit-table" });
       t.appendChild(el("thead", null, [el("tr", null, [
-        el("th", null, ["Name"]), el("th", null, ["Email"]), el("th", null, ["Grade"]),
+        el("th", null, ["Name"]), el("th", null, ["Cohort"]), el("th", null, ["Email"]), el("th", null, ["Grade"]),
         el("th", null, ["Resp/Due"]), el("th", null, ["Rate"]), el("th", null, [""]),
       ])]));
       const tb = el("tbody");
       if (rows.length === 0) {
-        tb.appendChild(el("tr", null, [el("td", { colspan: "6", class: "muted" }, ["No participants enrolled yet."])]));
+        tb.appendChild(el("tr", null, [el("td", { colspan: "7", class: "muted" }, ["No participants enrolled yet."])]));
       }
       rows.forEach((r) => {
-        const detail = el("tr", { class: "audit-detail", hidden: "" }, [el("td", { colspan: "6" }, ["Loading…"])]);
+        const detail = el("tr", { class: "audit-detail", hidden: "" }, [el("td", { colspan: "7" }, ["Loading…"])]);
         const detailCell = detail.firstChild;
         let loaded = false;
         const viewBtn = el("button", { class: "btn btn--ghost btn--small", type: "button", onClick: async () => {
@@ -2087,6 +2123,9 @@ function mountEmaCompliancePanel() {
             el("div", null, [r.name || "(no name)"]),
             el("div", { class: "ema-row__pid" }, ["PID: ", pidChip(r.userId)]),
           ]),
+          // Missing cohort is loud on purpose: that camper generates NO
+          // prompts for the new windows until one is assigned.
+          el("td", null, [r.emaCohort != null ? "C" + r.emaCohort : "⚠ none"]),
           el("td", null, [r.email || "—"]),
           el("td", null, [r.gradeLevel || "—"]),
           el("td", null, [r.responded + "/" + r.due]),
