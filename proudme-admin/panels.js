@@ -2171,9 +2171,12 @@ function mountSurveyPushPanel() {
     "Tapping it opens a page in the app with a “Take the survey” button (parental gate), then your link. Only iPhones on Build 25+ with notifications allowed can receive it.",
   ]));
 
-  const titleInput = el("input", { type: "text", class: "filter-input", maxlength: "120", placeholder: "Notification title (e.g. ProudMe survey)" });
-  const bodyInput = el("textarea", { class: "filter-input", rows: "2", maxlength: "300", placeholder: "Message (e.g. We’d love your feedback — tap to take a quick survey.)" });
+  const titleInput = el("input", { type: "text", class: "filter-input", maxlength: "120", placeholder: "Notification title (e.g. ProudMe Survey)" });
+  const bodyInput = el("textarea", { class: "filter-input", rows: "2", maxlength: "300", placeholder: "Message (e.g. Tap to take a quick survey.)" });
   const urlInput = el("input", { type: "url", class: "filter-input", placeholder: "https://..." });
+  // Prefill the standard camp copy so every send is consistent; operator can edit.
+  titleInput.value = "ProudMe Survey";
+  bodyInput.value = "Tap to take a quick survey.";
   urlInput.value = SURVEY_PUSH_DEFAULT_URL;
 
   // Target: all enrolled (default) or one searched camper.
