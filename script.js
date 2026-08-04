@@ -1,41 +1,65 @@
-// Tiny progressive-enhancement script. The site fully works without it.
-// We only handle: (1) closing the nav after an anchor click on small screens,
-// (2) flagging the active section while scrolling so the nav can highlight.
-
-(function () {
+// Ordered homepage scroll progress. The active state is calculated from the
+// page's actual section order, so it cannot jump backward when observer
+// callbacks arrive in a different order.
+(function orderedScrollProgress() {
   'use strict';
 
-  // Highlight the active section in the top nav based on scroll position.
-  // Best-effort, falls back to no highlighting if IntersectionObserver isn't
-  // available (older browsers).
-  if (!('IntersectionObserver' in window)) return;
+  var nav = document.querySelector('.nav');
+  var linksWrap = document.getElementById('nav-links');
+  var indicator = linksWrap && linksWrap.querySelector('.nav__indicator');
+  var links = linksWrap ? Array.prototype.slice.call(linksWrap.querySelectorAll('a[href^="#"]')) : [];
+  var entries = links.map(function (link) {
+    return { link: link, section: document.getElementById(link.getAttribute('href').slice(1)) };
+  }).filter(function (entry) { return entry.section; });
+  if (!nav || !entries.length) return;
 
-  var navLinks = Array.prototype.slice.call(
-    document.querySelectorAll('.nav__links a[href^="#"]')
-  );
-  if (!navLinks.length) return;
+  var activeIndex = -1;
+  var ticking = false;
 
-  var byId = {};
-  navLinks.forEach(function (link) {
-    var id = link.getAttribute('href').slice(1);
-    if (id) byId[id] = link;
-  });
+  function positionIndicator(link) {
+    if (!indicator || !link || window.innerWidth < 900) return;
+    indicator.style.width = link.offsetWidth + 'px';
+    indicator.style.transform = 'translateX(' + link.offsetLeft + 'px)';
+    indicator.classList.add('is-visible');
+  }
 
-  var observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      var link = byId[entry.target.id];
-      if (!link) return;
-      if (entry.isIntersecting) {
-        navLinks.forEach(function (l) { l.removeAttribute('aria-current'); });
-        link.setAttribute('aria-current', 'true');
-      }
+  function setActive(nextIndex) {
+    if (nextIndex === activeIndex) {
+      if (nextIndex >= 0) positionIndicator(entries[nextIndex].link);
+      return;
+    }
+    activeIndex = nextIndex;
+    entries.forEach(function (entry, index) {
+      if (index === nextIndex) entry.link.setAttribute('aria-current', 'true');
+      else entry.link.removeAttribute('aria-current');
     });
-  }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
+    if (nextIndex >= 0) positionIndicator(entries[nextIndex].link);
+    else if (indicator) indicator.classList.remove('is-visible');
+  }
 
-  Object.keys(byId).forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) observer.observe(el);
-  });
+  function update() {
+    ticking = false;
+    var reference = window.scrollY + nav.offsetHeight + (window.innerHeight * 0.28);
+    var nextIndex = -1;
+    entries.forEach(function (entry, index) {
+      if (entry.section.offsetTop <= reference) nextIndex = index;
+    });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      nextIndex = entries.length - 1;
+    }
+    setActive(nextIndex);
+  }
+
+  function requestUpdate() {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(update);
+  }
+
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', requestUpdate);
+  window.addEventListener('load', requestUpdate);
+  requestUpdate();
 })();
 
 // Contact form: POST as JSON to the ProudMe backend at /contact/public,
@@ -118,52 +142,6 @@
     }).then(function () {
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send message'; }
     });
-  });
-})();
-
-// CTA toast: matches the in-app toast (white card, gold left bar, slide-in
-// from top, auto-dismiss after 2.6s, tap to dismiss). Single-instance.
-(function () {
-  'use strict';
-  var btn = document.getElementById('cta-download');
-  var root = document.getElementById('toast-root');
-  if (!btn || !root) return;
-
-  var dismissTimer = null;
-
-  function showToast(message) {
-    root.innerHTML = '';
-    if (dismissTimer) clearTimeout(dismissTimer);
-
-    var toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.setAttribute('role', 'status');
-
-    var bar = document.createElement('span');
-    bar.className = 'toast__bar';
-    bar.setAttribute('aria-hidden', 'true');
-
-    var body = document.createElement('div');
-    body.className = 'toast__body';
-    body.textContent = message;
-
-    toast.appendChild(bar);
-    toast.appendChild(body);
-    root.appendChild(toast);
-
-    function dismiss() {
-      toast.classList.add('toast--leaving');
-      setTimeout(function () {
-        if (toast.parentNode) toast.parentNode.removeChild(toast);
-      }, 220);
-    }
-
-    toast.addEventListener('click', dismiss);
-    dismissTimer = setTimeout(dismiss, 2600);
-  }
-
-  btn.addEventListener('click', function () {
-    showToast(btn.getAttribute('data-toast') || 'Coming soon.');
   });
 })();
 
@@ -370,8 +348,8 @@
   typeMessage(messages[msgIndex], nextRotation);
 })();
 
-// Mobile nav toggle: hamburger opens a dropdown of the 5 anchor links
-// at <=599px. Auto-closes on link tap, Escape, or viewport widening.
+// Mobile nav toggle: hamburger opens a dropdown below 900px.
+// Auto-closes on link tap, Escape, or viewport widening.
 (function navToggle() {
   var nav = document.querySelector('.nav');
   var toggle = document.querySelector('.nav__toggle');
@@ -400,6 +378,6 @@
     if (e.key === 'Escape' && nav.classList.contains('is-open')) closeMenu();
   });
   window.addEventListener('resize', function () {
-    if (window.innerWidth > 599 && nav.classList.contains('is-open')) closeMenu();
+    if (window.innerWidth >= 900 && nav.classList.contains('is-open')) closeMenu();
   });
 })();

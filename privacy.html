@@ -6,11 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Privacy policy for ProudMe, the LSU Pedagogical Kinesiology Lab kids' wellness app. COPPA-compliant lab-based research project. IRB-approved 2025-02-05 (IRBAM-25-0015).">
   <meta name="theme-color" content="#3C3293">
-  <meta name="robots" content="index,follow">
+  <meta name="robots" content="index,follow,max-image-preview:large">
 
   <meta property="og:title" content="ProudMe · Privacy Policy">
   <meta property="og:description" content="How ProudMe collects, uses, and protects your information. COPPA-compliant. Built by the LSU Pedagogical Kinesiology Lab.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://proudme.org/privacy.html">
   <meta property="og:image" content="https://proudme.org/assets/og-card.png?v=2">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -25,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.min.css">
   <link rel="icon" href="assets/appicon-indigo.svg" type="image/svg+xml">
 </head>
 <body>
@@ -36,11 +37,16 @@
         <img class="nav__brand-mark" src="assets/logo-mark-brand.svg" alt="" width="32" height="32">
         ProudMe
       </a>
-      <nav class="nav__links" aria-label="Primary">
-        <a href="index.html#features">Features</a>
-        <a href="index.html#updates">Updates</a>
-        <a href="index.html#security">Security</a>
-        <a href="privacy.html" class="nav__links-privacy" aria-current="page">Privacy</a>
+      <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation menu">
+        <span class="nav__toggle-bar"></span>
+        <span class="nav__toggle-bar"></span>
+        <span class="nav__toggle-bar"></span>
+      </button>
+      <nav id="nav-links" class="nav__links" aria-label="Primary">
+        <a href="index.html#how-it-works">How it works</a>
+        <a href="index.html#learn">Learn</a>
+        <a href="index.html#safety">Safety</a>
+        <a href="blog/">Blog</a>
         <a href="index.html#contact">Contact</a>
       </nav>
     </div>
@@ -53,7 +59,7 @@
       <p>
         <strong>Effective date:</strong> May 15, 2026<br>
         <strong>Last updated:</strong> May 25, 2026<br>
-        <strong>For app version:</strong> ProudMe iOS v1.0
+        <strong>For:</strong> The current public ProudMe iOS release
       </p>
       <p>
         <em>Aligned with Apple App Store Review Guidelines 5.1.1 and 5.1.2, the Children's Online Privacy Protection Act (COPPA) 16 CFR Part 312, and standard practice for U.S. academic research apps that serve minors. ProudMe is a lab-based research project operated directly by the LSU Pedagogical Kinesiology Lab; the Family Educational Rights and Privacy Act (FERPA) does not strictly apply because the lab is not an educational agency and the project is not run through any child's school (see Section 7). IRB approval is in place under protocol IRBAM-25-0015 (LSU, initial approval 2025-02-05; continuation 2026-02-04 with 45 CFR 46 "no longer requires continuing review" status).</em>
@@ -280,11 +286,14 @@
       <nav class="footer__links" aria-label="Footer">
         <a href="index.html#privacy-section">Privacy</a>
         <a href="index.html#security">Security</a>
+        <a href="blog/">Blog</a>
         <a href="privacy.html" aria-current="page">Privacy Policy</a>
+        <a href="support.html">Support</a>
         <a href="index.html#contact">Contact us</a>
       </nav>
     </div>
   </footer>
 
+  <script src="script.min.js" defer></script>
 </body>
 </html>

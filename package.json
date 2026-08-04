@@ -1,0 +1,21 @@
+{
+  "name": "proudme-landing",
+  "version": "1.0.0",
+  "description": "ProudMe public website and parent guide library",
+  "scripts": {
+    "test": "playwright test",
+    "test:site": "playwright test tests/public-site.spec.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proud-me/proudme-landing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "homepage": "https://proudme.org/",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}
