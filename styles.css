@@ -287,13 +287,7 @@ button { font: inherit; cursor: pointer; }
   filter: blur(80px);
   opacity: 0.55;
   pointer-events: none;
-  animation: heroMesh 30s linear infinite;
-  will-change: transform;
   z-index: 0;
-}
-
-@keyframes heroMesh {
-  to { transform: rotate(360deg); }
 }
 
 .hero__inner { position: relative; z-index: 1; }
@@ -1814,6 +1808,10 @@ button { font: inherit; cursor: pointer; }
   margin-top: 32px;
 }
 
+.inside-app__grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .app-preview {
   min-width: 0;
   margin: 0;
@@ -1846,6 +1844,46 @@ button { font: inherit; cursor: pointer; }
 .app-preview figcaption span {
   color: var(--ink2);
   font-size: 12px;
+}
+
+.home-faq {
+  background: var(--surface-alt);
+}
+
+.home-faq__list {
+  display: grid;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.home-faq__list details {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+  padding: 0 20px;
+}
+
+.home-faq__list summary {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.home-faq__list details p {
+  margin: 0;
+  padding: 0 0 20px;
+  color: var(--ink2);
+  line-height: 1.7;
+}
+
+@media (max-width: 767px) {
+  .inside-app__grid--three {
+    grid-template-columns: 1fr;
+  }
 }
 
 .section-heading-row {

@@ -1,0 +1,5 @@
+Contact: mailto:pklab@lsu.edu
+Expires: 2027-08-08T23:59:59Z
+Preferred-Languages: en
+Canonical: https://proudme.org/.well-known/security.txt
+Policy: https://proudme.org/support.html

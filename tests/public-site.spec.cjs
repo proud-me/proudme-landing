@@ -122,6 +122,35 @@ test('the blog hub exposes all ten articles in four named clusters', async ({ pa
   }
 });
 
+test('homepage presents the wider audience, real app screens, safeguards, LSU context, and parent FAQ', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.hero__kicker')).toHaveText('For kids and teens ages 7–13+');
+  await expect(page.locator('.inside-app .app-preview')).toHaveCount(3);
+  await expect(page.locator('.inside-app .app-preview img[src^="assets/app/"]')).toHaveCount(3);
+  await expect(page.locator('.research-ribbon')).toContainText('Built at LSU');
+  await expect(page.locator('.home-faq details')).toHaveCount(9);
+  await expect(page.locator('.home-faq')).toContainText('New accounts are intended for ages 7 through 17');
+
+  const applicationSchema = await page.locator('script[type="application/ld+json"]').first().textContent();
+  const graph = JSON.parse(applicationSchema)['@graph'];
+  const app = graph.find((entry) => entry['@type'] === 'MobileApplication');
+  expect(app.audience.suggestedMinAge).toBe(7);
+  expect(app.audience.suggestedMaxAge).toBe(17);
+});
+
+test('age and research positioning stays internally consistent', () => {
+  const publicFiles = collectHtml(root).filter((file) => !file.includes(`${path.sep}proudme-admin${path.sep}`));
+  for (const file of publicFiles) {
+    const html = fs.readFileSync(file, 'utf8');
+    expect(html, `${path.relative(root, file)} contains the retired ages 7–11 positioning`).not.toMatch(/ages? 7(?:–|-| to )11/i);
+    expect(html, `${path.relative(root, file)} contains the retired ages 7–15 positioning`).not.toMatch(/ages? 7(?:–|-| to )15/i);
+    expect(html, `${path.relative(root, file)} treats ordinary app use as research-only`).not.toMatch(/use of ProudMe is part of an IRB-approved research study/i);
+  }
+  const home = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  expect(home).toContain('For kids and teens ages 7–13+');
+  expect(home).toContain('ages 7 through 17');
+});
+
 for (const [route, campaign] of articles) {
   test(`${route} meets the editorial and download-funnel contract`, async ({ page }) => {
     await page.goto(route);
@@ -275,6 +304,26 @@ test('sitemap covers every canonical route and robots points to it', () => {
   expect((sitemap.match(/<url>/g) || []).length).toBe(routes.length);
   expect(robots).toContain('Sitemap: https://proudme.org/sitemap.xml');
   expect(robots).toContain('Disallow: /proudme-admin/');
+  expect(sitemap).not.toContain('404.html');
+});
+
+test('RSS, custom 404, and security contact files meet their public contracts', async ({ page, request }) => {
+  const feed = fs.readFileSync(path.join(root, 'feed.xml'), 'utf8');
+  expect((feed.match(/<item>/g) || [])).toHaveLength(10);
+  for (const [route] of articles) expect(feed).toContain(`<link>${canonicalFor(route)}</link>`);
+  expect(feed).toContain('<atom:link href="https://proudme.org/feed.xml" rel="self" type="application/rss+xml"/>');
+
+  const security = fs.readFileSync(path.join(root, '.well-known', 'security.txt'), 'utf8');
+  expect(security).toContain('Contact: mailto:pklab@lsu.edu');
+  expect(security).toContain('Canonical: https://proudme.org/.well-known/security.txt');
+  expect(security).toContain('Preferred-Languages: en');
+  expect(security).toMatch(/Expires: 2027-08-08T23:59:59Z/);
+
+  const securityResponse = await request.get('/.well-known/security.txt');
+  expect(securityResponse.ok()).toBeTruthy();
+  await page.goto('/404.html');
+  await expect(page.locator('h1')).toHaveText('That page wandered off.');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');
 });
 
 test('public HTML contains no stale launch copy or tracker scripts', () => {
