@@ -122,11 +122,11 @@ test('the blog hub exposes all ten articles in four named clusters', async ({ pa
   }
 });
 
-test('homepage presents the wider audience, real app screens, safeguards, LSU context, and parent FAQ', async ({ page }) => {
+test('homepage presents the wider audience, habit loop, safeguards, LSU context, and parent FAQ', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.hero__kicker')).toHaveText('For kids and teens ages 7–13+');
-  await expect(page.locator('.inside-app .app-preview')).toHaveCount(3);
-  await expect(page.locator('.inside-app .app-preview img[src^="assets/app/"]')).toHaveCount(3);
+  await expect(page.locator('.inside-app')).toHaveCount(0);
+  await expect(page.locator('.story-step__visual--choose .habit-orb')).toHaveCount(4);
   await expect(page.locator('.research-ribbon')).toContainText('Built at LSU');
   await expect(page.locator('.home-faq details')).toHaveCount(9);
   await expect(page.locator('.home-faq')).toContainText('New accounts are intended for ages 7 through 17');
@@ -136,6 +136,61 @@ test('homepage presents the wider audience, real app screens, safeguards, LSU co
   const app = graph.find((entry) => entry['@type'] === 'MobileApplication');
   expect(app.audience.suggestedMinAge).toBe(7);
   expect(app.audience.suggestedMaxAge).toBe(17);
+});
+
+test('homepage blog and download sections expose the redesigned visual hierarchy', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.blog-feature__media img')).toHaveCount(1);
+  await expect(page.locator('.blog-links__media img')).toHaveCount(2);
+  await expect(page.locator('.blog-feature__body .blog-card__link')).toContainText('Read the guide');
+  await expect(page.locator('.home-faq > .container > .section__title')).toHaveCSS('text-align', 'center');
+
+  const blogCardHeights = await page.locator('.blog-feature, .blog-links article').evaluateAll((cards) => (
+    cards.map((card) => Math.round(card.getBoundingClientRect().height))
+  ));
+  expect(blogCardHeights).toHaveLength(3);
+  expect(Math.max(...blogCardHeights) - Math.min(...blogCardHeights)).toBeLessThanOrEqual(1);
+
+  const habitDistribution = await page.locator('.story-step__visual--choose').evaluate((visual) => {
+    const parent = visual.getBoundingClientRect();
+    return [...visual.querySelectorAll('.habit-orb')].map((orb) => {
+      const box = orb.getBoundingClientRect();
+      return {
+        x: (box.left + box.width / 2 - parent.left) / parent.width,
+        y: (box.top + box.height / 2 - parent.top) / parent.height,
+      };
+    });
+  });
+  expect(habitDistribution.filter((point) => point.x < .5)).toHaveLength(2);
+  expect(habitDistribution.filter((point) => point.x > .5)).toHaveLength(2);
+  expect(habitDistribution.filter((point) => point.y < .5)).toHaveLength(2);
+  expect(habitDistribution.filter((point) => point.y > .5)).toHaveLength(2);
+
+  await expect(page.locator('.conversion__proof span')).toHaveText([
+    'Free to use',
+    'No ads',
+    'iPhone + iPad',
+  ]);
+  await expect(page.locator('.conversion__milestone')).toHaveText([
+    '1 Pick a goal',
+    '2 Log a win',
+    '3 Keep improving',
+    '4 Feel proud',
+  ]);
+  await expect(page.locator('.conversion__action a')).toHaveAttribute('href', appUrl);
+
+  const sectionOrder = await page.locator('main > section').evaluateAll((sections) => sections.map((section) => ({
+    id: section.id,
+    className: section.className,
+  })));
+  const blogIndex = sectionOrder.findIndex((section) => section.id === 'blog');
+  const faqIndex = sectionOrder.findIndex((section) => section.className.includes('home-faq'));
+  const contactIndex = sectionOrder.findIndex((section) => section.id === 'contact');
+  const conversionIndex = sectionOrder.findIndex((section) => section.className.includes('conversion'));
+  expect(blogIndex).toBeLessThan(faqIndex);
+  expect(faqIndex).toBeLessThan(contactIndex);
+  expect(contactIndex).toBeLessThan(conversionIndex);
+  expect(conversionIndex).toBe(sectionOrder.length - 1);
 });
 
 test('age and research positioning stays internally consistent', () => {
@@ -184,6 +239,94 @@ test('Smart App Banners are present only on intended conversion pages', async ({
     } else {
       await expect(banners).toHaveCount(0);
     }
+  }
+});
+
+test('public pages share the yellow app-mark navigation and compact closing CTA', async ({ page }) => {
+  for (const route of [...routes, '/404.html']) {
+    await page.goto(route);
+    await expect(page.locator('.nav__brand-mark')).toHaveAttribute('src', '/assets/logo-mark-brand.svg');
+    await expect(page.locator('#nav-links > a')).toHaveText([
+      'How it works',
+      'Learn',
+      'Safety',
+      'Blog',
+      'Contact',
+      'Download app now',
+    ]);
+    await expect(page.locator('#nav-links a', { hasText: 'About' })).toHaveCount(0);
+    await expect(page.locator('#nav-links a', { hasText: 'Support' })).toHaveCount(0);
+    await expect(page.locator('.nav__download')).toHaveAttribute('href', appUrl);
+
+    await expect(page.locator('main > .conversion')).toHaveCount(1);
+    await expect(page.locator('main > .conversion .conversion__milestone')).toHaveCount(4);
+    await expect(page.locator('main > .conversion .conversion__action a')).toHaveAttribute('href', appUrl);
+    await expect(page.locator('.download-banner')).toHaveCount(0);
+  }
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/about.html');
+  const compactCta = await page.locator('main > .conversion .conversion__intro').boundingBox();
+  expect(compactCta.height).toBeLessThanOrEqual(430);
+});
+
+test('the blog guide-library introduction is centered', async ({ page }) => {
+  await page.goto('/blog/');
+  await expect(page.locator('#guide-library')).toHaveCSS('text-align', 'center');
+  await expect(page.locator('.blog-listing > .container > .section__lead')).toHaveCSS('text-align', 'center');
+});
+
+test('article closing CTAs use clean screen-only app artwork', async ({ page }) => {
+  for (const [route] of articles) {
+    await page.goto(route);
+    const artwork = page.locator('.article__cta--closing figure img');
+    await expect(artwork).toHaveCount(1);
+    await expect(artwork).toHaveAttribute('src', /-phone\.webp$/);
+    await expect(artwork.locator('..')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(artwork.locator('..')).toHaveCSS('padding', '0px');
+  }
+});
+
+test('mobile editorial text is centered across public page types', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const route of ['/', '/about.html', '/privacy.html', '/support.html', '/contact/', '/blog/', '/blog/how-proudme-keeps-ai-kid-safe.html']) {
+    await page.goto(route);
+    const misaligned = await page.locator('main h1, main h2, main h3, main p, main .section__eyebrow, main .article__cta-kicker').evaluateAll((nodes) =>
+      nodes
+        .filter((node) => getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden')
+        .filter((node) => getComputedStyle(node).textAlign !== 'center')
+        .map((node) => `${node.tagName.toLowerCase()}.${node.className}`)
+    );
+    expect(misaligned, `${route} has mobile text that is not centered`).toEqual([]);
+  }
+});
+
+test('homepage mobile pills, buttons, blog cards, and LSU mark are centered', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await expect(page.locator('.conversion__intro')).toHaveCSS('text-align', 'center');
+  await expect(page.locator('.conversion__copy > .section__eyebrow')).toHaveCSS('margin-left', /[1-9]\d*(?:\.\d+)?px/);
+  await expect(page.locator('.conversion__proof')).toHaveCSS('justify-content', 'center');
+  await expect(page.locator('.conversion__action')).toHaveCSS('align-items', 'center');
+  await expect(page.locator('.blog-editorial__heading')).toHaveCSS('align-items', 'center');
+  await expect(page.locator('.blog-feature__body')).toHaveCSS('align-items', 'center');
+  await expect(page.locator('.blog-feature .blog-card__link')).toHaveCSS('align-self', 'center');
+  await expect(page.locator('.blog-links__body > span').first()).toHaveCSS('align-self', 'center');
+  await expect(page.locator('.blog-links__read').first()).toHaveCSS('align-self', 'center');
+  await expect(page.locator('.research-ribbon')).toHaveCSS('justify-items', 'center');
+
+  const ribbon = await page.locator('.research-ribbon').boundingBox();
+  const mark = await page.locator('.research-ribbon__mark').boundingBox();
+  expect(Math.abs((mark.x + mark.width / 2) - (ribbon.x + ribbon.width / 2))).toBeLessThanOrEqual(1);
+
+  for (const selector of [
+    '.learn-editorial__copy > a[href="blog/introducing-learn.html"]',
+    '.safety-story__links > a[href="blog/how-proudme-keeps-ai-kid-safe.html"]',
+  ]) {
+    const link = await page.locator(selector).boundingBox();
+    const wrapper = await page.locator(selector).locator('..').boundingBox();
+    expect(Math.abs((link.x + link.width / 2) - (wrapper.x + wrapper.width / 2))).toBeLessThanOrEqual(1);
   }
 });
 

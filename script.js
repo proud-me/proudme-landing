@@ -1,3 +1,81 @@
+// Shared public-site chrome. Every public page gets the same primary
+// navigation and the same compact closing download moment without copying
+// component markup across the static site.
+(function sharedSiteChrome() {
+  'use strict';
+
+  var appUrl = 'https://apps.apple.com/us/app/proudme-healthy-habits/id6772700786';
+  var path = window.location.pathname;
+  var isHome = path === '/' || path === '/index.html';
+  var isBlog = path === '/blog/' || path.indexOf('/blog/') === 0;
+  var isContact = path === '/contact/' || path === '/contact/index.html';
+  var nav = document.querySelector('.nav');
+
+  if (nav) {
+    var sectionPrefix = isHome ? '' : '/';
+    nav.innerHTML =
+      '<div class="nav__inner">' +
+        '<a class="nav__brand" href="/" aria-label="ProudMe home">' +
+          '<img class="nav__brand-mark" src="/assets/logo-mark-brand.svg" alt="" width="38" height="38">' +
+          '<span>ProudMe</span>' +
+        '</a>' +
+        '<button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation menu">' +
+          '<span class="nav__toggle-bar"></span><span class="nav__toggle-bar"></span><span class="nav__toggle-bar"></span>' +
+        '</button>' +
+        '<nav id="nav-links" class="nav__links' + (isHome ? ' nav__links--progress' : '') + '" aria-label="Primary">' +
+          '<a href="' + sectionPrefix + '#how-it-works">How it works</a>' +
+          '<a href="' + sectionPrefix + '#learn">Learn</a>' +
+          '<a href="' + sectionPrefix + '#safety">Safety</a>' +
+          '<a href="/blog/"' + (isBlog ? ' aria-current="page"' : '') + '>Blog</a>' +
+          '<a href="' + sectionPrefix + '#contact"' + (isContact ? ' aria-current="page"' : '') + '>Contact</a>' +
+          '<a class="nav__download" href="' + appUrl + '" target="_blank" rel="noopener" data-campaign="web-nav">Download app now</a>' +
+          (isHome ? '<span class="nav__indicator" aria-hidden="true"></span>' : '') +
+        '</nav>' +
+      '</div>';
+  }
+
+  if (!isHome) {
+    Array.prototype.forEach.call(document.querySelectorAll('.download-banner'), function (banner) {
+      banner.remove();
+    });
+
+    var main = document.querySelector('main');
+    if (main && !main.querySelector('.conversion')) {
+      var closingCta = document.createElement('section');
+      closingCta.className = 'conversion conversion--compact section';
+      closingCta.setAttribute('aria-labelledby', 'sitewide-cta-title');
+      closingCta.innerHTML =
+        '<div class="container container--wide conversion__intro">' +
+          '<div class="conversion__copy">' +
+            '<span class="section__eyebrow">Available now · Free</span>' +
+            '<h2 id="sitewide-cta-title">Give today’s small win somewhere to grow.</h2>' +
+            '<p>Set one doable goal, notice the effort, and let ProudMe help the next healthy choice feel possible.</p>' +
+            '<div class="conversion__proof" aria-label="ProudMe app highlights">' +
+              '<span>Free to use</span><span>No ads</span><span>iPhone + iPad</span>' +
+            '</div>' +
+            '<div class="conversion__action">' +
+              '<a class="cta-pill" href="' + appUrl + '" target="_blank" rel="noopener" data-campaign="web-sitewide"><span aria-hidden="true">📲</span> Download on the App Store</a>' +
+              '<small>For kids and teens ages 7–13+ · Parent-first privacy</small>' +
+            '</div>' +
+          '</div>' +
+          '<div class="conversion__visual" aria-hidden="true">' +
+            '<span class="conversion__orbit conversion__orbit--outer"></span>' +
+            '<span class="conversion__orbit conversion__orbit--inner"></span>' +
+            '<span class="conversion__milestone conversion__milestone--one"><b>1</b> Pick a goal</span>' +
+            '<span class="conversion__milestone conversion__milestone--two"><b>2</b> Log a win</span>' +
+            '<span class="conversion__milestone conversion__milestone--three"><b>3</b> Keep improving</span>' +
+            '<span class="conversion__milestone conversion__milestone--four"><b>4</b> Feel proud</span>' +
+            '<div class="pebble-mascot pebble-mascot--cta"><div class="pebble-mascot__face">' +
+              '<span class="pebble-mascot__eye pebble-mascot__eye--l"></span><span class="pebble-mascot__eye pebble-mascot__eye--r"></span>' +
+              '<span class="pebble-mascot__cheek pebble-mascot__cheek--l"></span><span class="pebble-mascot__cheek pebble-mascot__cheek--r"></span><span class="pebble-mascot__mouth"></span>' +
+            '</div></div>' +
+          '</div>' +
+        '</div>';
+      main.appendChild(closingCta);
+    }
+  }
+})();
+
 // Ordered homepage scroll progress. The active state is calculated from the
 // page's actual section order, so it cannot jump backward when observer
 // callbacks arrive in a different order.
