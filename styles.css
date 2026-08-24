@@ -5292,6 +5292,7 @@ body {
   }
 
   .blog-card__tag,
+  .blog-listing .blog-card__link,
   .blog-links__body > span,
   .blog-feature .blog-card__link,
   .blog-links__read {
